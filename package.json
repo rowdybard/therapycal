@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "app.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node api-server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -11,6 +11,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "node-fetch": "^3.3.2",
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "firebase-admin": "^12.7.0",
