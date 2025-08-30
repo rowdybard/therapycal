@@ -1,5 +1,5 @@
 // Main application logic
-import { db } from './firebase-config.js';
+import { db, auth, onAuthStateChanged } from './firebase-config.js';
 import { aiAssistant, voiceAssistant } from './ai-assistant.js';
 import { 
     collection, 
@@ -32,6 +32,9 @@ let currentSettings = {
     reminderTime: 24, // hours before appointment
     autoReminders: true
 };
+
+// Ensure we only initialize Firestore listeners once (after auth)
+let dataListenersInitialized = false;
 
 // DOM elements
 const elements = {
@@ -290,6 +293,7 @@ async function saveProvider(providerData) {
                 email: providerData.email || '',
                 title: providerData.title || '',
                 color: providerData.color,
+                ownerUid: auth.currentUser ? auth.currentUser.uid : null,
                 createdAt: Timestamp.now(),
                 updatedAt: Timestamp.now()
             });
@@ -311,7 +315,8 @@ async function deleteProvider(providerId) {
         // Update appointments to remove provider reference
         const appointmentsQuery = query(
             collection(db, 'appointments'),
-            where('providerId', '==', providerId)
+            where('providerId', '==', providerId),
+            where('ownerUid', '==', auth.currentUser ? auth.currentUser.uid : null)
         );
         const appointmentDocs = await getDocs(appointmentsQuery);
         
@@ -437,6 +442,7 @@ async function saveClient(clientData) {
             phone: (clientData.phone || '').trim(),
             color: clientData.color || '#3b82f6',
             notes: (clientData.notes || '').trim(),
+            ownerUid: auth.currentUser ? auth.currentUser.uid : null,
             updatedAt: Timestamp.now()
         };
         
@@ -509,7 +515,8 @@ async function deleteClient(clientId) {
         // First, delete all appointments for this client
         const appointmentsQuery = query(
             collection(db, 'appointments'),
-            where('clientId', '==', clientId)
+            where('clientId', '==', clientId),
+            where('ownerUid', '==', auth.currentUser ? auth.currentUser.uid : null)
         );
         const appointmentDocs = await getDocs(appointmentsQuery);
         
@@ -605,6 +612,7 @@ async function saveAppointment(appointmentData) {
             status: appointmentData.status || 'scheduled',
             notes: (appointmentData.notes || '').trim(),
             repeats: appointmentData.repeats || 'none',
+            ownerUid: auth.currentUser ? auth.currentUser.uid : null,
             updatedAt: Timestamp.now()
         };
         
@@ -910,8 +918,12 @@ function setupDataListeners() {
     console.log('Database instance check:', db);
     
     try {
-        // Listen for client changes
-        const clientsQuery = query(collection(db, 'clients'), orderBy('name'));
+        // Listen for client changes (scoped to current user)
+        const clientsQuery = query(
+            collection(db, 'clients'),
+            where('ownerUid', '==', auth.currentUser ? auth.currentUser.uid : null),
+            orderBy('name')
+        );
         onSnapshot(clientsQuery, 
             (snapshot) => {
                 console.log('Clients snapshot received:', snapshot.size, 'documents');
@@ -932,8 +944,12 @@ function setupDataListeners() {
             }
         );
         
-        // Listen for provider changes
-        const providersQuery = query(collection(db, 'providers'), orderBy('name'));
+        // Listen for provider changes (scoped to current user)
+        const providersQuery = query(
+            collection(db, 'providers'),
+            where('ownerUid', '==', auth.currentUser ? auth.currentUser.uid : null),
+            orderBy('name')
+        );
         onSnapshot(providersQuery, 
             (snapshot) => {
                 console.log('Providers snapshot received:', snapshot.size, 'documents');
@@ -953,8 +969,12 @@ function setupDataListeners() {
             }
         );
         
-        // Listen for appointment changes
-        const appointmentsQuery = query(collection(db, 'appointments'), orderBy('start'));
+        // Listen for appointment changes (scoped to current user)
+        const appointmentsQuery = query(
+            collection(db, 'appointments'),
+            where('ownerUid', '==', auth.currentUser ? auth.currentUser.uid : null),
+            orderBy('start')
+        );
         onSnapshot(appointmentsQuery, 
             (snapshot) => {
                 console.log('Appointments snapshot received:', snapshot.size, 'documents');
@@ -2647,8 +2667,14 @@ async function initializeApp() {
         // Setup event listeners
         setupEventListeners();
         
-        // Setup Firebase listeners
-        setupDataListeners();
+        // Wait for auth before attaching Firestore listeners
+        onAuthStateChanged(auth, (user) => {
+            currentUser = user;
+            if (user && !dataListenersInitialized) {
+                dataListenersInitialized = true;
+                setupDataListeners();
+            }
+        });
         
         // Set default view button active
         document.querySelector('[data-view="dayGridMonth"]').classList.add('bg-indigo-600', 'text-white');
