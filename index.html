@@ -1,0 +1,2244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Therapy Calendar</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Using the single, bundled FullCalendar script -->
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+    <!-- Firebase SDKs -->
+    <script type="module" src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js"></script>
+    <script type="module" src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"></script>
+    <script type="module" src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Mulish:wght@400;500;600;700&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Mulish', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        #client-notes, #appointment-notes {
+            font-family: 'Quicksand', sans-serif;
+        }
+
+        /* FullCalendar Customizations */
+        :root {
+            --fc-border-color: #e2e8f0;
+            --fc-daygrid-event-dot-width: 8px;
+            --fc-list-event-dot-width: 10px;
+            --fc-event-bg-color: #4f46e5;
+            --fc-event-border-color: #4f46e5;
+            --fc-event-text-color: #ffffff;
+            --fc-button-bg-color: #4f46e5;
+            --fc-button-active-bg-color: #4338ca;
+            --fc-today-bg-color: rgba(239, 246, 255, 0.7);
+        }
+        
+        /* Subtle background gradients for different calendar views */
+        .fc-dayGridMonth-view {
+            background: linear-gradient(135deg, 
+                rgba(79, 70, 229, 0.02) 0%, 
+                rgba(59, 130, 246, 0.03) 50%, 
+                rgba(16, 185, 129, 0.02) 100%) !important;
+        }
+        
+        .fc-timeGridWeek-view {
+            background: linear-gradient(135deg, 
+                rgba(239, 68, 68, 0.02) 0%, 
+                rgba(245, 101, 101, 0.03) 50%, 
+                rgba(251, 146, 60, 0.02) 100%) !important;
+        }
+        
+        .fc-timeGridDay-view {
+            background: linear-gradient(135deg, 
+                rgba(16, 185, 129, 0.02) 0%, 
+                rgba(52, 211, 153, 0.03) 50%, 
+                rgba(34, 197, 94, 0.02) 100%) !important;
+        }
+        
+        .fc-listWeek-view {
+            background: linear-gradient(135deg, 
+                rgba(139, 92, 246, 0.02) 0%, 
+                rgba(168, 85, 247, 0.03) 50%, 
+                rgba(196, 181, 253, 0.02) 100%) !important;
+        }
+        
+        .fc-event {
+            cursor: pointer;
+            border-radius: 4px;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            position: relative;
+            font-family: 'Mulish', sans-serif !important;
+            font-size: 16px !important;
+            font-weight: 600 !important;
+        }
+        
+        .fc-event-title {
+            flex-grow: 1;
+            font-family: 'Mulish', sans-serif !important;
+            font-size: 16px !important;
+            font-weight: 600 !important;
+            line-height: 1.2 !important;
+        }
+        
+        /* Enhanced list view with clean card design and drag support */
+        .fc-list-table {
+            background: transparent !important;
+            border: none !important;
+        }
+        
+        .fc-list-event {
+            background: white !important;
+            border: none !important;
+            border-left: 4px solid var(--client-color, #4f46e5) !important;
+            border-radius: 8px !important;
+            margin: 8px 0 !important;
+            padding: 16px !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+            cursor: grab !important;
+            transition: all 0.2s ease !important;
+            position: relative !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+        }
+        
+        .fc-list-event:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+        }
+        
+        .fc-list-event-time {
+            background: var(--client-color, #4f46e5) !important;
+            color: black !important;
+            font-weight: 600 !important;
+            padding: 8px 12px !important;
+            border-radius: 6px !important;
+            text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.8) !important;
+            font-size: 14px !important;
+            min-width: 120px !important;
+            text-align: center !important;
+            margin-right: 16px !important;
+        }
+        
+        .fc-list-event-title {
+            color: #374151 !important;
+            font-weight: 600 !important;
+            font-size: 16px !important;
+            flex: 1 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        
+        .fc-list-event-dot {
+            display: none !important;
+        }
+        
+        .fc-list-day-cushion {
+            background: rgba(79, 70, 229, 0.1) !important;
+            border-radius: 6px !important;
+            margin: 12px 0 8px 0 !important;
+            padding: 8px 16px !important;
+            font-weight: 600 !important;
+            color: #4f46e5 !important;
+        }
+
+        .fc-event .material-icons {
+            font-size: 1em;
+            margin-left: 4px;
+        }
+
+        .priority-dot {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            border: 1px solid white;
+        }
+
+        .fc-daygrid-day-frame,
+        .fc-timegrid-slot-lane {
+            cursor: crosshair;
+        }
+        
+        /* Drag-to-create styling */
+        .fc-select-mirror {
+            background-color: rgba(59, 130, 246, 0.3) !important;
+            border: 2px dashed #3b82f6 !important;
+            border-radius: 4px;
+        }
+        
+        .fc-timegrid-slot {
+            cursor: crosshair;
+        }
+        
+        /* Selection feedback */
+        .fc-highlight {
+            background-color: rgba(59, 130, 246, 0.2) !important;
+            border: 1px solid #3b82f6 !important;
+        }
+        
+        /* Sidebar and Layout */
+        #sidebar {
+            transition: transform 0.3s ease-in-out;
+        }
+        
+        @media (max-width: 768px) {
+            #sidebar {
+                transform: translateX(-100%);
+            }
+            #sidebar.open {
+                transform: translateX(0);
+            }
+        }
+        
+        /* Calendar height adjustments to fit viewport without scrolling */
+        #calendar {
+            height: calc(100vh - 200px) !important;
+            min-height: 500px !important;
+            max-height: none !important;
+            overflow-x: hidden !important; /* Disable horizontal scrolling */
+        }
+        
+        /* Disable horizontal scrolling in day view */
+        .fc-scroller-liquid-absolute {
+            overflow-x: hidden !important;
+        }
+        
+        .fc-view-harness {
+            overflow-x: hidden !important;
+        }
+        
+        /* Specific adjustments for different screen sizes */
+        @media (max-width: 767px) {
+            #calendar {
+                height: calc(100vh - 250px) !important;
+            }
+        }
+        
+        @media (min-width: 768px) and (max-width: 1023px) {
+            #calendar {
+                height: calc(100vh - 180px) !important;
+            }
+        }
+        
+        @media (min-width: 1024px) {
+            #calendar {
+                height: calc(100vh - 160px) !important;
+            }
+        }
+        
+        /* Ensure calendar container takes full available height */
+        .flex-grow {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .flex-grow > div {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Loading spinner */
+        .spinner {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #4f46e5;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Dark Mode Styles */
+        .dark {
+            color-scheme: dark;
+        }
+        
+        .dark body {
+            background-color: #111827;
+            color: #f9fafb;
+        }
+        
+        .dark .bg-white {
+            background-color: #1f2937 !important;
+        }
+        
+        .dark .bg-gray-50 {
+            background-color: #374151 !important;
+        }
+        
+        .dark .bg-gray-100 {
+            background-color: #374151 !important;
+        }
+        
+        .dark .bg-gray-200 {
+            background-color: #4b5563 !important;
+        }
+        
+        .dark .text-gray-600 {
+            color: #d1d5db !important;
+        }
+        
+        .dark .text-gray-700 {
+            color: #e5e7eb !important;
+        }
+        
+        .dark .text-gray-800 {
+            color: #f3f4f6 !important;
+        }
+        
+        .dark .text-gray-900 {
+            color: #f9fafb !important;
+        }
+        
+        .dark .border-gray-200 {
+            border-color: #4b5563 !important;
+        }
+        
+        .dark .border-gray-300 {
+            border-color: #6b7280 !important;
+        }
+        
+        /* Dark mode hover effects - only for interactive buttons */
+        .dark button:hover:not(.bg-indigo-600):not(.bg-red-600):not(.bg-green-600):not(.bg-blue-600) {
+            background-color: #000000 !important;
+            color: #ffffff !important;
+        }
+        
+        .dark .hover\\:bg-gray-50:hover,
+        .dark .hover\\:bg-gray-100:hover,
+        .dark .hover\\:bg-gray-200:hover {
+            background-color: #000000 !important;
+            color: #ffffff !important;
+        }
+        
+        /* Dark mode for FullCalendar */
+        .dark .fc {
+            background-color: #1f2937;
+            color: #f9fafb;
+        }
+        
+        .dark .fc-theme-standard .fc-scrollgrid {
+            border-color: #4b5563;
+        }
+        
+        .dark .fc-theme-standard td,
+        .dark .fc-theme-standard th {
+            border-color: #4b5563;
+        }
+        
+        .dark .fc-col-header-cell {
+            background-color: #374151;
+            color: #e5e7eb;
+        }
+        
+        .dark .fc-daygrid-day {
+            background-color: #1f2937;
+        }
+        
+        .dark .fc-timegrid-slot {
+            border-color: #4b5563;
+        }
+        
+        /* Dark mode calendar event hover effects */
+        .dark .fc-event:hover {
+            background-color: #000000 !important;
+            color: #ffffff !important;
+            border-color: #374151 !important;
+        }
+        
+        .dark .fc-event:hover .fc-event-title {
+            color: #ffffff !important;
+        }
+        
+        .dark .fc-event:hover .fc-event-time {
+            color: #ffffff !important;
+        }
+        
+        /* Dark mode for list view - comprehensive styling */
+        .dark .fc-list-view {
+            background-color: #1f2937 !important;
+        }
+        
+        .dark .fc-list-table {
+            background-color: #1f2937 !important;
+        }
+        
+        .dark .fc-list-event {
+            background-color: #4b5563 !important;
+            border-color: #6b7280 !important;
+            color: #ffffff !important;
+        }
+        
+        .dark .fc-list-event:hover {
+            background-color: #ffffff !important;
+            border-color: #374151 !important;
+            color: #000000 !important;
+        }
+        
+        .dark .fc-list-event:hover .fc-list-event-title {
+            color: #000000 !important;
+        }
+        
+        .dark .fc-list-event:hover .fc-list-event-time {
+            color: #000000 !important;
+        }
+        
+        .dark .fc-list-event .fc-list-event-title {
+            color: #ffffff !important;
+            font-weight: 700 !important;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8) !important;
+        }
+        
+        .dark .fc-list-event .fc-list-event-time {
+            color: #ffffff !important;
+            font-weight: 600 !important;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8) !important;
+        }
+        
+        /* Additional contrast enhancement for list view in dark mode */
+        .dark .fc-list-event td {
+            color: #ffffff !important;
+            background-color: #374151 !important;
+        }
+        
+        .dark .fc-list-event-dot {
+            border-color: #ffffff !important;
+        }
+        
+        /* Fix list view sticky header issue - ensure headers scroll with content */
+        .fc-list-view .fc-list-day-cushion {
+            position: relative !important;
+            z-index: 1 !important;
+            background-color: inherit !important;
+        }
+        
+        .fc-list-view .fc-list-day {
+            position: relative !important;
+            z-index: 1 !important;
+        }
+        
+        .fc-list-view .fc-scroller {
+            overflow: visible !important;
+            position: static !important;
+        }
+        
+        .fc-list-view .fc-list-table {
+            position: static !important;
+            z-index: auto !important;
+        }
+        
+        .fc-list-view .fc-list-day-side {
+            position: static !important;
+            z-index: auto !important;
+        }
+        
+        .fc-list-view tbody {
+            position: static !important;
+        }
+        
+        /* AGGRESSIVE: Force all list view elements to scroll naturally */
+        .fc-list-view .fc-list-day-cushion,
+        .fc-list-view .fc-list-day-text,
+        .fc-list-view .fc-list-day-side-text,
+        .fc-list-view tr,
+        .fc-list-view td,
+        .fc-list-view th,
+        .fc-list-view .fc-list-day,
+        .fc-list-view .fc-list-table,
+        .fc-list-view table,
+        .fc-list-view .fc-scrollgrid,
+        .fc-list-view .fc-scrollgrid-sync-table {
+            position: static !important;
+            top: auto !important;
+            bottom: auto !important;
+            left: auto !important;
+            right: auto !important;
+            z-index: auto !important;
+            transform: none !important;
+            -webkit-transform: none !important;
+            will-change: auto !important;
+        }
+        
+        /* Target specifically the first day header that gets stuck */
+        .fc-list-view tr:first-child,
+        .fc-list-view tr:first-child td,
+        .fc-list-view tr:first-child th,
+        .fc-list-view tbody tr:first-child,
+        .fc-list-view tbody tr:first-child td,
+        .fc-list-view tbody tr:first-child th {
+            position: static !important;
+            top: auto !important;
+            z-index: 1 !important;
+            transform: none !important;
+            -webkit-transform: none !important;
+        }
+        
+        /* Remove any sticky positioning from ALL list view elements */
+        .fc-list-view thead,
+        .fc-list-view thead tr,
+        .fc-list-view thead th,
+        .fc-list-view tbody,
+        .fc-list-view tbody tr,
+        .fc-list-view tbody td,
+        .fc-list-view tbody th {
+            position: static !important;
+            top: auto !important;
+            z-index: auto !important;
+            transform: none !important;
+            -webkit-transform: none !important;
+        }
+        
+        /* Override FullCalendar's internal positioning */
+        .fc-list-view .fc-scroller,
+        .fc-list-view .fc-scroller-liquid,
+        .fc-list-view .fc-scroller-liquid-absolute,
+        .fc-list-view .fc-scrollgrid-section,
+        .fc-list-view .fc-scrollgrid-section-body {
+            position: static !important;
+            overflow: visible !important;
+            transform: none !important;
+            -webkit-transform: none !important;
+        }
+        
+        /* NUCLEAR OPTION: Override everything with max specificity */
+        .fc-theme-standard .fc-list-view .fc-list-table tbody tr,
+        .fc-theme-standard .fc-list-view .fc-list-table tbody tr td,
+        .fc-theme-standard .fc-list-view .fc-list-table tbody tr th,
+        .fc .fc-list-view .fc-list-table tbody tr,
+        .fc .fc-list-view .fc-list-table tbody tr td,
+        .fc .fc-list-view .fc-list-table tbody tr th,
+        .fc-list-view table tbody tr,
+        .fc-list-view table tbody tr td,
+        .fc-list-view table tbody tr th {
+            position: static !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            bottom: auto !important;
+            z-index: auto !important;
+            transform: none !important;
+            -webkit-transform: none !important;
+            -moz-transform: none !important;
+            -ms-transform: none !important;
+            will-change: auto !important;
+        }
+        
+        /* Force the entire list view container to use natural scrolling */
+        .fc-list-view,
+        .fc-list-view * {
+            position: static !important;
+            overflow: visible !important;
+        }
+        
+        /* ULTIMATE FIX: Disable sticky headers completely in list view */
+        .fc-list-view .fc-list-sticky {
+            position: static !important;
+            top: auto !important;
+        }
+        
+        /* Override any FullCalendar sticky classes */
+        .fc-list-view .fc-sticky {
+            position: static !important;
+            top: auto !important;
+        }
+        
+        /* Target the specific sticky table headers */
+        .fc-list-view .fc-scrollgrid-sticky {
+            position: static !important;
+            top: auto !important;
+        }
+        
+        .dark .fc-list-day-cushion {
+            background-color: #374151 !important;
+            color: #e5e7eb !important;
+        }
+        
+        .dark .fc-list-day-text {
+            color: #e5e7eb !important;
+        }
+        
+        .dark .fc-list-day-side-text {
+            color: #9ca3af !important;
+        }
+        
+        .dark .fc-list-empty {
+            background-color: #1f2937 !important;
+            color: #9ca3af !important;
+        }
+        
+        /* Dark mode for modals and popups */
+        .dark #voice-assistant-modal .bg-white,
+        .dark #ai-notes-modal .bg-white,
+        .dark #ai-response-popup .bg-white {
+            background-color: #1f2937 !important;
+        }
+        
+        .dark #voice-assistant-modal h2,
+        .dark #ai-notes-modal h2,
+        .dark #ai-response-popup h2 {
+            color: #f9fafb !important;
+        }
+        
+        .dark #voice-status-display,
+        .dark #transcript-text,
+        .dark #response-text,
+        .dark #ai-notes-content,
+        .dark #popup-response-content {
+            color: #f9fafb !important;
+        }
+        
+        .dark #voice-transcript,
+        .dark #voice-response,
+        .dark #appointment-confirmation {
+            background-color: #374151 !important;
+            border-color: #4b5563 !important;
+        }
+        
+        .dark #voice-transcript h3,
+        .dark #voice-response h3 {
+            color: #e5e7eb !important;
+        }
+        
+        .dark #appointment-confirmation h3 {
+            color: #fbbf24 !important;
+        }
+        
+        .dark #appointment-details {
+            color: #fde68a !important;
+        }
+        
+        .dark #voice-loading span {
+            color: #d1d5db !important;
+        }
+        
+        /* Dark mode for buttons and interactive elements */
+        .dark button:not(.bg-indigo-600):not(.bg-red-600):not(.bg-green-600):not(.bg-blue-600):not(.bg-yellow-500) {
+            background-color: #374151 !important;
+            color: #f9fafb !important;
+            border-color: #4b5563 !important;
+        }
+        
+        .dark button:not(.bg-indigo-600):not(.bg-red-600):not(.bg-green-600):not(.bg-blue-600):not(.bg-yellow-500):hover {
+            background-color: #000000 !important;
+            color: #ffffff !important;
+        }
+        
+        .dark #voice-record-btn {
+            background-color: #374151 !important;
+        }
+        
+        .dark #voice-record-btn:hover {
+            background-color: #000000 !important;
+        }
+        
+        .dark #voice-record-icon {
+            color: #d1d5db !important;
+        }
+        
+        .dark #continue-conversation-btn {
+            background-color: #1e40af !important;
+        }
+        
+        .dark #continue-conversation-btn span {
+            color: #93c5fd !important;
+        }
+        
+        /* Dark mode for user authentication elements */
+        .dark #user-info span {
+            color: #f9fafb !important;
+        }
+        
+        .dark #logout-btn {
+            color: #d1d5db !important;
+        }
+        
+        .dark #logout-btn:hover {
+            color: #ffffff !important;
+        }
+        
+        /* Dark mode for form inputs and selects */
+        .dark input[type="text"],
+        .dark input[type="email"],
+        .dark input[type="password"],
+        .dark input[type="datetime-local"],
+        .dark input[type="date"],
+        .dark input[type="time"],
+        .dark input[type="number"],
+        .dark textarea,
+        .dark select {
+            background-color: #374151 !important;
+            color: #f9fafb !important;
+            border-color: #4b5563 !important;
+        }
+        
+        .dark input[type="text"]:focus,
+        .dark input[type="email"]:focus,
+        .dark input[type="password"]:focus,
+        .dark input[type="datetime-local"]:focus,
+        .dark input[type="date"]:focus,
+        .dark input[type="time"]:focus,
+        .dark input[type="number"]:focus,
+        .dark textarea:focus,
+        .dark select:focus {
+            border-color: #6366f1 !important;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1) !important;
+        }
+        
+        /* Dark mode for labels and form text */
+        .dark label {
+            color: #e5e7eb !important;
+        }
+        
+        .dark .text-sm {
+            color: #d1d5db !important;
+        }
+        
+        .dark .text-xs {
+            color: #9ca3af !important;
+        }
+        
+        /* Dark mode for close buttons */
+        .dark #close-voice-modal-btn,
+        .dark #close-ai-notes-btn,
+        .dark #close-popup-btn {
+            color: #9ca3af !important;
+        }
+        
+        .dark #close-voice-modal-btn:hover,
+        .dark #close-ai-notes-btn:hover,
+        .dark #close-popup-btn:hover {
+            color: #ffffff !important;
+        }
+        
+        /* Dark mode for border elements */
+        .dark .border-b {
+            border-color: #4b5563 !important;
+        }
+        
+        .dark .border-t {
+            border-color: #4b5563 !important;
+        }
+        
+        /* Enhanced text contrast for better legibility */
+        .dark h1,
+        .dark h2,
+        .dark h3,
+        .dark h4,
+        .dark h5,
+        .dark h6 {
+            color: #f9fafb !important;
+            font-weight: 600;
+        }
+        
+        .dark p {
+            color: #e5e7eb !important;
+        }
+        
+        .dark .font-medium {
+            color: #f3f4f6 !important;
+        }
+        
+        .dark .font-bold {
+            color: #f9fafb !important;
+        }
+        
+        /* Dark mode for sidebar elements */
+        .dark #sidebar {
+            background-color: #1f2937 !important;
+            border-color: #374151 !important;
+        }
+        
+        .dark #sidebar h3 {
+            color: #f9fafb !important;
+        }
+        
+        .dark #client-list li {
+            color: #e5e7eb !important;
+            border-color: #4b5563 !important;
+        }
+        
+        .dark #client-list li:hover {
+            background-color: #374151 !important;
+            color: #f9fafb !important;
+        }
+        
+        /* Dark mode for dropdowns and select elements */
+        .dark select option {
+            background-color: #374151 !important;
+            color: #f9fafb !important;
+        }
+        
+        /* Dark mode for loading states */
+        .dark #loading-overlay {
+            background-color: rgba(17, 24, 39, 0.8) !important;
+        }
+        
+        .dark #loading-overlay .bg-white {
+            background-color: #1f2937 !important;
+        }
+        
+        /* Dark mode for calendar toolbar */
+        .dark .fc-toolbar {
+            background-color: #1f2937 !important;
+        }
+        
+        .dark .fc-toolbar-title {
+            color: #f9fafb !important;
+        }
+        
+        .dark .fc-button {
+            background-color: #374151 !important;
+            border-color: #4b5563 !important;
+            color: #f9fafb !important;
+        }
+        
+        .dark .fc-button:hover {
+            background-color: #000000 !important;
+            border-color: #6b7280 !important;
+            color: #ffffff !important;
+        }
+        
+        .dark .fc-button-active {
+            background-color: #4f46e5 !important;
+            border-color: #4f46e5 !important;
+        }
+        
+        /* Dark mode for toast notifications with better contrast */
+        .dark .toast {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* Dark mode for specific text color overrides */
+        .dark .text-gray-500 {
+            color: #9ca3af !important;
+        }
+        
+        .dark .text-gray-400 {
+            color: #9ca3af !important;
+        }
+        
+        .dark .text-gray-300 {
+            color: #d1d5db !important;
+        }
+        
+        /* Dark mode for placeholder text */
+        .dark input::placeholder,
+        .dark textarea::placeholder {
+            color: #9ca3af !important;
+        }
+        
+        /* Dark mode for disabled elements */
+        .dark button:disabled,
+        .dark input:disabled,
+        .dark select:disabled {
+            background-color: #1f2937 !important;
+            color: #6b7280 !important;
+            border-color: #374151 !important;
+            cursor: not-allowed;
+        }
+        
+        /* Dark mode for error states */
+        .dark .border-red-300 {
+            border-color: #ef4444 !important;
+        }
+        
+        .dark .text-red-600 {
+            color: #f87171 !important;
+        }
+        
+        .dark .bg-red-50 {
+            background-color: #1f2937 !important;
+            border: 1px solid #ef4444;
+        }
+        
+        /* Dark mode for success states */
+        .dark .text-green-600 {
+            color: #34d399 !important;
+        }
+        
+        .dark .bg-green-50 {
+            background-color: #1f2937 !important;
+            border: 1px solid #10b981;
+        }
+        
+        /* Dark mode for warning states */
+        .dark .text-yellow-600 {
+            color: #fbbf24 !important;
+        }
+        
+        .dark .bg-yellow-50 {
+            background-color: #1f2937 !important;
+            border: 1px solid #f59e0b;
+        }
+        
+        /* Dark mode for info states */
+        .dark .text-blue-600 {
+            color: #60a5fa !important;
+        }
+        
+        .dark .bg-blue-50 {
+            background-color: #1f2937 !important;
+            border: 1px solid #3b82f6;
+        }
+        
+        /* Improved dark mode text shadows for calendar events */
+        .dark .fc-event {
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8) !important;
+        }
+        
+        .dark .fc-event-title,
+        .dark .fc-event-time {
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8) !important;
+        }
+        
+        /* Dark mode specific calendar event text improvements */
+        .dark .fc-timegrid-event .fc-event-title,
+        .dark .fc-timegrid-event .fc-event-time {
+            color: #ffffff !important;
+            font-weight: 700 !important;
+            text-shadow: 
+                0 1px 2px rgba(0, 0, 0, 0.9),
+                0 -1px 1px rgba(255, 255, 255, 0.1) !important;
+        }
+        
+        /* Ensure maximum contrast for all text elements in dark mode */
+        .dark * {
+            box-shadow: none;
+        }
+        
+        .dark .material-icons {
+            color: inherit !important;
+        }
+        
+        .recording {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .voice-recording {
+            color: #dc2626 !important;
+        }
+        
+        .voice-processing {
+            color: #059669 !important;
+        }
+
+        /* Toast notifications */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 6px;
+            color: white;
+            font-weight: 500;
+            z-index: 1000;
+            opacity: 0;
+            transform: translateX(100px);
+            transition: all 0.3s ease;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .toast.success {
+            background-color: #10b981;
+        }
+
+        .toast.error {
+            background-color: #ef4444;
+        }
+
+        .toast.warning {
+            background-color: #f59e0b;
+        }
+
+        /* Calendar sliding animations */
+        .fc {
+            transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease;
+        }
+        
+        .calendar-sliding-left {
+            animation: slideOutLeft 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+        }
+        
+        .calendar-sliding-right {
+            animation: slideOutRight 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+        }
+        
+        .calendar-sliding-in-left {
+            animation: slideInLeft 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+        }
+        
+        .calendar-sliding-in-right {
+            animation: slideInRight 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+        }
+        
+        @keyframes slideOutLeft {
+            0% { transform: translateX(0); opacity: 1; }
+            100% { transform: translateX(-100%); opacity: 0.3; }
+        }
+        
+        @keyframes slideOutRight {
+            0% { transform: translateX(0); opacity: 1; }
+            100% { transform: translateX(100%); opacity: 0.3; }
+        }
+        
+        @keyframes slideInLeft {
+            0% { transform: translateX(-100%); opacity: 0.3; }
+            100% { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes slideInRight {
+            0% { transform: translateX(100%); opacity: 0.3; }
+            100% { transform: translateX(0); opacity: 1; }
+        }
+        
+        /* Smooth calendar container with scroll snap */
+        #calendar {
+            overflow: hidden;
+            position: relative;
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+            scroll-snap-type: y mandatory;
+            scroll-behavior: smooth;
+        }
+        
+        /* Ensure calendar scrolls properly with scroll snap */
+        .fc-scroller {
+            overflow-y: auto !important;
+            max-height: calc(100vh - 280px);
+            scroll-snap-type: y mandatory;
+            scroll-behavior: smooth;
+        }
+        
+        /* Scroll snap points for time slots */
+        .fc-timegrid-slot {
+            scroll-snap-align: start;
+        }
+        
+        /* Scroll snap for day headers and week rows */
+        .fc-daygrid-week {
+            scroll-snap-align: start;
+        }
+        
+        /* Scroll snap for individual day cells */
+        .fc-daygrid-day {
+            scroll-snap-align: start;
+        }
+        
+        /* Enhanced scroll snap for time grid hours */
+        .fc-timegrid-axis {
+            scroll-snap-align: start;
+        }
+        
+        /* Force calendar to show full height */
+        .fc-timegrid-body {
+            min-height: 600px !important;
+        }
+        
+        /* Better mobile calendar height */
+        @media (max-width: 768px) {
+            #calendar {
+                max-height: calc(100vh - 140px);
+            }
+            
+            .fc-scroller {
+                max-height: calc(100vh - 220px);
+                scroll-snap-type: y mandatory;
+            }
+            
+            .fc-timegrid-body {
+                min-height: 500px !important;
+            }
+        }
+        
+        /* Enhanced touch responsiveness */
+        .fc-event {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .fc-event:active {
+            transform: scale(0.98);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* Fix overlapping appointment display issues */
+        .fc-event.fc-event-mirror {
+            transform: translateY(0) !important;
+        }
+        
+        .fc-event[style*="height: 50%"], 
+        .fc-event[style*="height:50%"] {
+            transform: translateY(0) !important;
+        }
+        
+        /* Ensure overlapping events are visible */
+        .fc-timegrid-event-harness {
+            z-index: 2;
+        }
+        
+        /* Daily/Week view styling - metallic frame background */
+        .fc-timegrid-event {
+            position: relative;
+            border: none !important;
+            border-radius: 8px;
+            font-weight: 600;
+            color: white !important;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            overflow: hidden;
+            box-shadow: 
+                inset 0 1px 0 rgba(255,255,255,0.4),
+                inset 0 -1px 0 rgba(0,0,0,0.3),
+                0 2px 8px rgba(0,0,0,0.2);
+        }
+        
+        .fc-timegrid-event::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                linear-gradient(315deg, 
+                    rgba(255,255,255,0.2) 0%,
+                    rgba(255,255,255,0.05) 25%,
+                    rgba(0,0,0,0.1) 75%,
+                    rgba(0,0,0,0.3) 100%);
+            border: 2px solid;
+            border-color: 
+                rgba(255,255,255,0.6) 
+                rgba(255,255,255,0.3) 
+                rgba(0,0,0,0.3) 
+                rgba(255,255,255,0.6);
+            border-radius: 8px;
+            z-index: 1;
+        }
+        
+        .fc-timegrid-event .fc-event-title,
+        .fc-timegrid-event .fc-event-time {
+            position: relative;
+            z-index: 2;
+        }
+        
+        /* Only show badges in day view, not weekly */
+        .fc-timeGridDay .fc-timegrid-event .fc-event-title,
+        .fc-timeGridDay .fc-timegrid-event .fc-event-time {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin: 2px;
+            backdrop-filter: blur(2px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .fc-timegrid-event:hover {
+            transform: translateY(-1px);
+            box-shadow: 
+                inset 0 1px 0 rgba(255,255,255,0.5),
+                inset 0 -1px 0 rgba(0,0,0,0.4),
+                0 4px 12px rgba(0,0,0,0.3);
+        }
+        
+        /* Add text content via CSS for month and day views only */
+        .fc-daygrid-view .fc-event::after {
+            content: attr(data-client-name);
+        }
+        
+        .fc-timeGridDay .fc-event::after {
+            content: attr(data-client-name);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 4px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            margin: 3px;
+            display: block;
+            font-size: 14px;
+            font-weight: 700;
+            color: white;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+            backdrop-filter: blur(4px);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        
+        /* Professional day view text styling with enhanced readability */
+        .fc-timeGridDay .fc-timegrid-event {
+            border-radius: 6px !important;
+            border-width: 2px !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+        }
+        
+        .fc-timeGridDay .fc-timegrid-event .fc-event-title,
+        .fc-timeGridDay .fc-timegrid-event .fc-event-time {
+            color: white !important;
+            font-weight: 700 !important;
+            text-shadow: 
+                0 1px 3px rgba(0,0,0,0.9),
+                0 0 10px rgba(0,0,0,0.7),
+                0 0 20px rgba(0,0,0,0.5) !important;
+            filter: drop-shadow(0 0 3px rgba(0,0,0,0.8)) !important;
+            line-height: 1.2 !important;
+            padding: 2px 4px !important;
+        }
+        
+        .fc-timeGridDay .fc-timegrid-event .fc-event-title {
+            font-size: 13px !important;
+            margin-bottom: 1px !important;
+        }
+        
+        .fc-timeGridDay .fc-timegrid-event .fc-event-time {
+            font-size: 11px !important;
+            opacity: 0.9 !important;
+        }
+        
+        /* Enhanced hover effects for day view */
+        .fc-timeGridDay .fc-timegrid-event:hover {
+            transform: translateY(-1px) !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25) !important;
+            transition: all 0.2s ease !important;
+        }
+        
+        /* Weekly view - COMPLETELY remove all text including time */
+        .fc-timeGridWeek .fc-event::after {
+            content: "" !important;
+            display: none !important;
+        }
+        
+        .fc-timeGridWeek .fc-event {
+            color: transparent !important;
+            font-size: 0 !important;
+            line-height: 0 !important;
+            text-indent: -9999px !important;
+        }
+        
+        .fc-timeGridWeek .fc-event *,
+        .fc-timeGridWeek .fc-event-time,
+        .fc-timeGridWeek .fc-event-title,
+        .fc-timeGridWeek .fc-event-main,
+        .fc-timeGridWeek .fc-event-main-frame,
+        .fc-timeGridWeek .fc-timegrid-event,
+        .fc-timeGridWeek .fc-timegrid-event .fc-event-time,
+        .fc-timeGridWeek .fc-timegrid-event .fc-event-title,
+        .fc-timeGridWeek .fc-timegrid-event .fc-event-main {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            font-size: 0 !important;
+            height: 0 !important;
+            width: 0 !important;
+            color: transparent !important;
+            text-indent: -9999px !important;
+            overflow: hidden !important;
+        }
+        
+        /* Force weekly view events to show as pure color blocks */
+        .fc-timeGridWeek .fc-timegrid-event-harness {
+            overflow: hidden !important;
+        }
+        
+        .fc-timeGridWeek .fc-timegrid-event-harness * {
+            font-size: 0 !important;
+            color: transparent !important;
+            text-indent: -9999px !important;
+        }
+        
+        /* Style for overlapping events */
+        .fc-timegrid-event.fc-event-overlap {
+            opacity: 0.9;
+            transform: translateX(50%) !important;
+            width: calc(50% - 4px) !important;
+        }
+        
+        /* Tiny colored dots for month view appointments */
+        .fc .fc-daygrid-event {
+            width: 8px !important;
+            height: 8px !important;
+            border-radius: 50% !important;
+            border: none !important;
+            padding: 0 !important;
+            margin: 1px !important;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative !important;
+            display: inline-block !important;
+            flex: none !important;
+            min-height: auto !important;
+            line-height: 1 !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        
+        /* Hide all text in month view - dots only */
+        .fc .fc-daygrid-event .fc-event-title,
+        .fc .fc-daygrid-event .fc-event-time,
+        .fc .fc-daygrid-event .fc-event-main {
+            display: none !important;
+            visibility: hidden !important;
+            font-size: 0 !important;
+            color: transparent !important;
+        }
+        
+        /* Hover effect for dots */
+        .fc .fc-daygrid-event:hover {
+            transform: scale(1.3);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+        
+        /* Ensure dots flow horizontally within day cells */
+        .fc .fc-daygrid-day-events {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            gap: 2px !important;
+            padding: 2px !important;
+        }
+        
+
+        
+        /* Text visibility for different views */
+        .fc .fc-event-title {
+            color: white !important;
+            font-weight: 600;
+        }
+        
+        .fc .fc-event-time {
+            color: rgba(255,255,255,0.9) !important;
+            font-weight: 500;
+        }
+        
+        /* Daily view - show text with enhanced readability */
+        .fc-timeGridDay .fc-event-title {
+            display: block;
+            font-size: 14px;
+            font-weight: 700;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+            background: rgba(0, 0, 0, 0.8) !important;
+            padding: 3px 8px !important;
+            margin: 2px !important;
+            border-radius: 5px !important;
+            border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        }
+        
+        .fc-timeGridDay .fc-event-time {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+            background: rgba(0, 0, 0, 0.8) !important;
+            padding: 2px 6px !important;
+            margin: 1px !important;
+            border-radius: 4px !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        }
+
+        /* Improved button animations */
+        .view-btn, button {
+            transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+        
+        .view-btn:active, button:active {
+            transform: scale(0.95);
+        }
+
+        /* AI indicator styling */
+        .ai-indicator {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            width: 16px;
+            height: 16px;
+            background: linear-gradient(45deg, #ffd700, #ffed4e, #ffd700);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
+            animation: aiShine 2s ease-in-out infinite;
+        }
+
+        .ai-indicator::before {
+            content: '✦';
+            color: #fff;
+            font-size: 10px;
+            text-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
+            animation: aiSpark 1.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes aiShine {
+            0%, 100% { 
+                box-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
+                background: linear-gradient(45deg, #ffd700, #ffed4e, #ffd700);
+            }
+            50% { 
+                box-shadow: 0 0 16px rgba(255, 215, 0, 0.8);
+                background: linear-gradient(45deg, #ffed4e, #ffd700, #ffed4e);
+            }
+        }
+
+        @keyframes aiSpark {
+            0% { 
+                transform: scale(1);
+                text-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
+            }
+            100% { 
+                transform: scale(1.1);
+                text-shadow: 0 0 8px rgba(255, 255, 255, 1);
+            }
+        }
+
+        /* Enhance microphone button when AI is active */
+        #voice-assistant-btn:hover .ai-indicator {
+            animation-duration: 1s;
+        }
+
+        #voice-assistant-btn.recording .ai-indicator {
+            background: linear-gradient(45deg, #ff6b6b, #ff8e8e, #ff6b6b);
+            box-shadow: 0 0 12px rgba(255, 107, 107, 0.6);
+        }
+
+        #voice-assistant-btn.processing .ai-indicator {
+            background: linear-gradient(45deg, #4ecdc4, #45b7b8, #4ecdc4);
+            box-shadow: 0 0 12px rgba(78, 205, 196, 0.6);
+            animation: aiShine 0.8s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen overflow-hidden flex">
+    
+    <!-- Authentication check overlay -->
+    <div id="auth-loading" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
+        <div class="text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p class="text-gray-600">Loading therapy calendar...</p>
+        </div>
+    </div>
+
+    <!-- Main app content (initially hidden) -->
+    <div id="main-app" class="w-full h-full flex hidden">
+
+    <!-- Loading overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg p-6 flex items-center space-x-3">
+            <div class="spinner"></div>
+            <span class="text-gray-700">Loading...</span>
+        </div>
+    </div>
+
+    <aside id="sidebar" class="bg-white w-80 h-full flex flex-col border-r border-gray-200 absolute md:relative z-20 md:z-auto">
+        <div class="p-4 border-b border-gray-200 flex-shrink-0">
+            <h1 class="text-2xl font-bold text-gray-800">TherapyCal</h1>
+            <p class="text-sm text-gray-500">Your scheduling assistant</p>
+        </div>
+
+        <div class="p-4 border-b border-gray-200 flex justify-between items-center flex-shrink-0">
+            <div>
+                <h3 class="font-semibold text-gray-700">Weekly Summary</h3>
+                <p id="weekly-summary" class="text-gray-600">Total Hours: <span class="font-bold">0h</span></p>
+                <p id="weekly-stats" class="text-sm text-gray-500">Appointments: <span id="weekly-appointments">0</span></p>
+            </div>
+            <div class="flex space-x-2">
+                <button id="analytics-btn" class="text-gray-500 hover:text-gray-800" title="Analytics">
+                    <span class="material-icons">analytics</span>
+                </button>
+                <button id="providers-btn" class="text-gray-500 hover:text-gray-800" title="Providers">
+                    <span class="material-icons">people</span>
+                </button>
+                <button id="settings-btn" class="text-gray-500 hover:text-gray-800" title="Settings">
+                    <span class="material-icons">settings</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-1 p-4 overflow-y-auto min-h-0">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-lg font-semibold text-gray-700">Clients</h2>
+                <div class="flex items-center space-x-2">
+                    <button id="toggle-sidebar-btn" class="text-gray-500 hover:text-gray-800" title="Hide Client List">
+                        <span class="material-icons">visibility_off</span>
+                    </button>
+                    <button id="add-client-btn" class="text-indigo-600 hover:text-indigo-800">
+                        <span class="material-icons">add</span>
+                    </button>
+                </div>
+            </div>
+             <div class="mb-4">
+                <label for="client-filter" class="block text-sm font-medium text-gray-700">Filter by Client</label>
+                <select id="client-filter" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                    <option value="all">All Clients</option>
+                </select>
+            </div>
+            <div id="client-list" class="space-y-2">
+                <div id="no-clients-msg" class="text-center text-gray-500 py-8">
+                    <span class="material-icons text-4xl mb-2 block">person_add</span>
+                    <p>No clients yet</p>
+                    <p class="text-sm">Add your first client to get started</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-screen">
+        <header class="bg-white p-2 border-b border-gray-200 flex flex-col md:flex-row md:items-center md:justify-between space-y-2 md:space-y-0">
+            <div class="flex items-center justify-between w-full">
+                <div class="flex items-center space-x-2">
+                    <button id="menu-toggle-btn" class="md:hidden p-2 text-gray-600">
+                        <span class="material-icons">menu</span>
+                    </button>
+                    <h2 id="calendar-title" class="text-lg font-semibold text-gray-800"></h2>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <!-- Dark Mode Toggle -->
+                    <button id="dark-mode-btn" class="px-3 py-1.5 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors duration-200" title="Toggle Dark Mode">
+                        <span class="material-icons text-base">dark_mode</span>
+                    </button>
+                    
+                    <!-- Privacy Toggle -->
+                    <button id="privacy-btn" class="px-3 py-1.5 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors duration-200" title="Toggle Privacy Mode">
+                        <span class="material-icons text-base">visibility</span>
+                    </button>
+                    
+                    <button id="today-btn" class="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300">Today</button>
+                    <button id="voice-assistant-btn" class="relative px-3 py-1.5 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors duration-200" title="AI Voice Assistant">
+                        <span id="voice-icon" class="material-icons text-base">mic</span>
+                        <div id="voice-status" class="absolute -top-1 -right-1 w-3 h-3 rounded-full hidden"></div>
+                        <div class="ai-indicator"></div>
+                    </button>
+
+                    <button id="prev-btn" class="p-1.5 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300"><span class="material-icons">chevron_left</span></button>
+                    <button id="next-btn" class="p-1.5 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300"><span class="material-icons">chevron_right</span></button>
+                </div>
+            </div>
+            <div class="flex items-center justify-between w-full">
+                <div class="flex items-center space-x-1" id="view-switcher">
+                    <button class="view-btn hidden md:inline-block px-3 py-1.5 ml-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300" data-view="dayGridMonth">Month</button>
+                    <button class="view-btn px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300" data-view="timeGridWeek">Week</button>
+                    <button class="view-btn px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300" data-view="timeGridDay">Day</button>
+                    <button class="view-btn hidden md:inline-block px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300" data-view="listWeek">List</button>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button id="new-appointment-btn" class="flex items-center space-x-1 bg-indigo-600 text-white px-3 py-1.5 rounded-md hover:bg-indigo-700 transition-colors">
+                        <span class="material-icons text-base">add</span>
+                        <span class="text-sm font-medium">New Appointment</span>
+                    </button>
+
+                </div>
+            </div>
+        </header>
+
+        <div class="flex-grow p-4" style="display: flex; flex-direction: column; overflow: hidden;">
+            <div id='calendar' class="bg-white rounded-lg shadow-sm flex-1"></div>
+        </div>
+    </main>
+    
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-10 hidden md:hidden"></div>
+
+    <!-- Client Modal -->
+    <div id="client-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-30">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h2 class="text-xl font-bold mb-4" id="client-modal-title">Add Client</h2>
+            <form id="client-form">
+                <input type="hidden" id="client-id">
+                <div class="space-y-4">
+                    <div>
+                        <label for="client-name" class="block text-sm font-medium text-gray-700">Name</label>
+                        <input type="text" id="client-name" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3" required>
+                    </div>
+                    <div>
+                        <label for="client-email" class="block text-sm font-medium text-gray-700">Email</label>
+                        <input type="email" id="client-email" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                    </div>
+                    <div>
+                        <label for="client-phone" class="block text-sm font-medium text-gray-700">Phone</label>
+                        <input type="tel" id="client-phone" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                    </div>
+                    <div>
+                        <label for="client-color" class="block text-sm font-medium text-gray-700">Label Color</label>
+                        <input type="color" id="client-color" value="#4f46e5" class="mt-1 block w-full h-10 border border-gray-300 rounded-md">
+                    </div>
+                    <div>
+                        <label for="client-notes" class="block text-sm font-medium text-gray-700">General Notes</label>
+                        <textarea id="client-notes" rows="4" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"></textarea>
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-between">
+                    <button type="button" id="delete-client-btn" class="bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 hidden">Delete</button>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" id="cancel-client-btn" class="bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300">Cancel</button>
+                        <button type="submit" class="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700">Save</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Appointment Modal -->
+    <div id="appointment-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-30">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h2 class="text-xl font-bold mb-4" id="appointment-modal-title">New Appointment</h2>
+            <form id="appointment-form">
+                <input type="hidden" id="appointment-id">
+                <div class="space-y-4">
+                    <div id="appointment-no-clients-msg" class="hidden text-center p-4 bg-yellow-100 text-yellow-800 rounded-md">
+                        Please add a client first before creating an appointment.
+                    </div>
+                    <div id="conflict-warning" class="hidden text-center p-4 bg-red-100 text-red-800 rounded-md">
+                        <span class="material-icons text-base mr-1">warning</span>
+                        This appointment overlaps with another session.
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="appointment-client" class="block text-sm font-medium text-gray-700">Client</label>
+                            <select id="appointment-client" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3" required></select>
+                        </div>
+                        <div>
+                            <label for="appointment-provider" class="block text-sm font-medium text-gray-700">Provider</label>
+                            <select id="appointment-provider" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3" required></select>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="appointment-start" class="block text-sm font-medium text-gray-700">Start Time</label>
+                        <input type="datetime-local" id="appointment-start" step="300" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3" required>
+                    </div>
+                    <div>
+                        <label for="appointment-duration" class="block text-sm font-medium text-gray-700">Duration (minutes)</label>
+                        <div class="flex space-x-2 mt-1">
+                            <button type="button" class="duration-preset px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded border" data-duration="30">30</button>
+                            <button type="button" class="duration-preset px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded border" data-duration="45">45</button>
+                            <button type="button" class="duration-preset px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded border" data-duration="50">50</button>
+                            <button type="button" class="duration-preset px-3 py-2 text-sm bg-indigo-600 text-white hover:bg-indigo-700 rounded border border-indigo-600" data-duration="60">60</button>
+                            <button type="button" class="duration-preset px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded border" data-duration="90">90</button>
+                        </div>
+                        <input type="number" id="appointment-duration" value="60" step="5" min="5" class="mt-2 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3" required>
+                    </div>
+                     <div>
+                        <label for="appointment-repeats" class="block text-sm font-medium text-gray-700">Repeats</label>
+                        <select id="appointment-repeats" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                            <option value="none">Never</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="biweekly">Biweekly</option>
+                            <option value="monthly">Monthly</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="appointment-priority" class="block text-sm font-medium text-gray-700">Priority</label>
+                            <select id="appointment-priority" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                                <option value="normal">Normal</option>
+                                <option value="high">High</option>
+                                <option value="urgent">Urgent</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="appointment-status" class="block text-sm font-medium text-gray-700">Status</label>
+                            <select id="appointment-status" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                                <option value="scheduled">Scheduled</option>
+                                <option value="confirmed">Confirmed</option>
+                                <option value="completed">Completed</option>
+                                <option value="cancelled">Cancelled</option>
+                                <option value="no-show">No Show</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center">
+                            <label for="appointment-notes" class="block text-sm font-medium text-gray-700">Session Notes</label>
+                            <button type="button" id="voice-notes-btn" class="text-sm text-indigo-600 hover:text-indigo-800 flex items-center space-x-1" title="Voice-to-text for notes">
+                                <span class="material-icons text-sm">mic</span>
+                                <span>Voice Notes</span>
+                            </button>
+                        </div>
+                        <textarea id="appointment-notes" rows="4" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3" placeholder="Add session notes here..."></textarea>
+                        <div class="mt-2 flex space-x-2">
+                            <button type="button" id="ai-analyze-notes-btn" class="text-sm text-indigo-600 hover:text-indigo-800 flex items-center space-x-1">
+                                <span class="material-icons text-sm">psychology</span>
+                                <span>Analyze with AI</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-between">
+                    <button type="button" id="delete-appointment-btn" class="bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 hidden">Delete</button>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" id="cancel-appointment-btn" class="bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300">Cancel</button>
+                        <button type="submit" class="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700">Save</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-30">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h2 class="text-xl font-bold mb-4">Settings</h2>
+            <div class="space-y-4">
+                <div>
+                    <label for="work-start-time" class="block text-sm font-medium text-gray-700">Work Start Time</label>
+                    <input type="time" id="work-start-time" value="09:00" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                </div>
+                <div>
+                    <label for="work-end-time" class="block text-sm font-medium text-gray-700">Work End Time</label>
+                    <input type="time" id="work-end-time" value="17:00" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                </div>
+                <div>
+                    <label for="default-duration" class="block text-sm font-medium text-gray-700">Default Appointment Duration (minutes)</label>
+                    <input type="number" id="default-duration" value="60" step="5" min="5" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                </div>
+                <div>
+                    <h3 class="text-sm font-medium text-gray-700 mb-2">Working Days</h3>
+                    <div class="grid grid-cols-7 gap-2">
+                        <label class="flex flex-col items-center">
+                            <input type="checkbox" id="work-day-0" class="mb-1" checked>
+                            <span class="text-xs">Sun</span>
+                        </label>
+                        <label class="flex flex-col items-center">
+                            <input type="checkbox" id="work-day-1" class="mb-1" checked>
+                            <span class="text-xs">Mon</span>
+                        </label>
+                        <label class="flex flex-col items-center">
+                            <input type="checkbox" id="work-day-2" class="mb-1" checked>
+                            <span class="text-xs">Tue</span>
+                        </label>
+                        <label class="flex flex-col items-center">
+                            <input type="checkbox" id="work-day-3" class="mb-1" checked>
+                            <span class="text-xs">Wed</span>
+                        </label>
+                        <label class="flex flex-col items-center">
+                            <input type="checkbox" id="work-day-4" class="mb-1" checked>
+                            <span class="text-xs">Thu</span>
+                        </label>
+                        <label class="flex flex-col items-center">
+                            <input type="checkbox" id="work-day-5" class="mb-1" checked>
+                            <span class="text-xs">Fri</span>
+                        </label>
+                        <label class="flex flex-col items-center">
+                            <input type="checkbox" id="work-day-6" class="mb-1">
+                            <span class="text-xs">Sat</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Automation Settings -->
+                <div class="border-t pt-4">
+                    <h3 class="text-sm font-medium text-gray-700 mb-3">Automation Settings</h3>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Automatic Reminders</label>
+                                <p class="text-xs text-gray-500">Send appointment reminders to clients</p>
+                            </div>
+                            <input type="checkbox" id="auto-reminders" checked class="h-4 w-4 text-indigo-600 border-gray-300 rounded">
+                        </div>
+                        <div>
+                            <label for="reminder-time" class="block text-sm font-medium text-gray-700">Reminder Time (hours before)</label>
+                            <input type="number" id="reminder-time" value="24" min="1" max="168" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end space-x-3">
+                <button type="button" id="cancel-settings-btn" class="bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300">Cancel</button>
+                <button type="button" id="save-settings-btn" class="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Providers Modal -->
+    <div id="providers-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-30">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">Manage Providers</h2>
+                <button id="add-provider-btn" class="bg-indigo-600 text-white px-3 py-1.5 rounded-md hover:bg-indigo-700 flex items-center space-x-1">
+                    <span class="material-icons text-sm">add</span>
+                    <span>Add Provider</span>
+                </button>
+            </div>
+            <div id="providers-list" class="space-y-3">
+                <!-- Providers will be dynamically added here -->
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button id="close-providers-btn" class="bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Provider Form Modal -->
+    <div id="provider-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-40">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h2 class="text-xl font-bold mb-4" id="provider-modal-title">Add Provider</h2>
+            <form id="provider-form">
+                <input type="hidden" id="provider-id">
+                <div class="space-y-4">
+                    <div>
+                        <label for="provider-name" class="block text-sm font-medium text-gray-700">Name</label>
+                        <input type="text" id="provider-name" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3" required>
+                    </div>
+                    <div>
+                        <label for="provider-email" class="block text-sm font-medium text-gray-700">Email</label>
+                        <input type="email" id="provider-email" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                    </div>
+                    <div>
+                        <label for="provider-title" class="block text-sm font-medium text-gray-700">Title/Specialty</label>
+                        <input type="text" id="provider-title" placeholder="e.g., Licensed Clinical Social Worker" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                    </div>
+                    <div>
+                        <label for="provider-color" class="block text-sm font-medium text-gray-700">Calendar Color</label>
+                        <input type="color" id="provider-color" value="#4f46e5" class="mt-1 block w-full h-10 border border-gray-300 rounded-md">
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-between">
+                    <button type="button" id="delete-provider-btn" class="bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 hidden">Delete</button>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" id="cancel-provider-btn" class="bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300">Cancel</button>
+                        <button type="submit" class="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700">Save</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Analytics Modal -->
+    <div id="analytics-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-30">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold">Practice Analytics</h2>
+                <div class="flex items-center space-x-3">
+                    <select id="analytics-period" class="border border-gray-300 rounded-md px-3 py-1">
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="quarter">This Quarter</option>
+                        <option value="year">This Year</option>
+                    </select>
+                    <button id="close-analytics-btn" class="text-gray-500 hover:text-gray-700">
+                        <span class="material-icons">close</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Analytics Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-blue-50 p-4 rounded-lg">
+                    <h3 class="text-sm font-medium text-blue-800">Total Appointments</h3>
+                    <p class="text-2xl font-bold text-blue-900" id="total-appointments">0</p>
+                </div>
+                <div class="bg-green-50 p-4 rounded-lg">
+                    <h3 class="text-sm font-medium text-green-800">Total Hours</h3>
+                    <p class="text-2xl font-bold text-green-900" id="total-hours">0h</p>
+                </div>
+                <div class="bg-yellow-50 p-4 rounded-lg">
+                    <h3 class="text-sm font-medium text-yellow-800">No-Show Rate</h3>
+                    <p class="text-2xl font-bold text-yellow-900" id="no-show-rate">0%</p>
+                </div>
+                <div class="bg-purple-50 p-4 rounded-lg">
+                    <h3 class="text-sm font-medium text-purple-800">Utilization</h3>
+                    <p class="text-2xl font-bold text-purple-900" id="utilization-rate">0%</p>
+                </div>
+            </div>
+
+            <!-- Analytics Charts -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <h3 class="text-lg font-semibold mb-3">Appointments by Day</h3>
+                    <div id="appointments-chart" class="h-48 flex items-center justify-center text-gray-500">
+                        Chart visualization will be here
+                    </div>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <h3 class="text-lg font-semibold mb-3">Provider Statistics</h3>
+                    <div id="provider-stats" class="space-y-2">
+                        <!-- Provider stats will be dynamically added -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed Analytics -->
+            <div class="mt-6">
+                <h3 class="text-lg font-semibold mb-3">Recent Activity</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full bg-white border border-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Client</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Provider</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Duration</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recent-appointments" class="divide-y divide-gray-200">
+                            <!-- Recent appointments will be dynamically added -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Assistant Modal -->
+    <div id="ai-assistant-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-30">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold flex items-center space-x-2">
+                    <span class="material-icons text-indigo-600">psychology</span>
+                    <span>AI Assistant</span>
+                </h2>
+                <button id="close-ai-assistant-btn" class="text-gray-500 hover:text-gray-700">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            
+            <!-- AI Features Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                <button id="ai-appointment-summary-btn" class="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left">
+                    <div class="flex items-center space-x-3">
+                        <span class="material-icons text-blue-600">summarize</span>
+                        <div>
+                            <h3 class="font-medium">Appointment Summary</h3>
+                            <p class="text-sm text-gray-600">AI insights on your schedule</p>
+                        </div>
+                    </div>
+                </button>
+                
+                <button id="ai-scheduling-optimization-btn" class="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left">
+                    <div class="flex items-center space-x-3">
+                        <span class="material-icons text-green-600">schedule</span>
+                        <div>
+                            <h3 class="font-medium">Scheduling Optimization</h3>
+                            <p class="text-sm text-gray-600">Smart scheduling suggestions</p>
+                        </div>
+                    </div>
+                </button>
+                
+                <button id="ai-practice-insights-btn" class="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left">
+                    <div class="flex items-center space-x-3">
+                        <span class="material-icons text-purple-600">insights</span>
+                        <div>
+                            <h3 class="font-medium">Practice Insights</h3>
+                            <p class="text-sm text-gray-600">Business intelligence from AI</p>
+                        </div>
+                    </div>
+                </button>
+                
+                <button id="ai-client-communication-btn" class="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left">
+                    <div class="flex items-center space-x-3">
+                        <span class="material-icons text-orange-600">message</span>
+                        <div>
+                            <h3 class="font-medium">Client Communication</h3>
+                            <p class="text-sm text-gray-600">AI-generated messages</p>
+                        </div>
+                    </div>
+                </button>
+                
+                <button id="ai-conflict-resolution-btn" class="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left">
+                    <div class="flex items-center space-x-3">
+                        <span class="material-icons text-red-600">gavel</span>
+                        <div>
+                            <h3 class="font-medium">Conflict Resolution</h3>
+                            <p class="text-sm text-gray-600">Smart scheduling conflicts</p>
+                        </div>
+                    </div>
+                </button>
+                
+                <button id="ai-session-analysis-btn" class="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left">
+                    <div class="flex items-center space-x-3">
+                        <span class="material-icons text-indigo-600">analytics</span>
+                        <div>
+                            <h3 class="font-medium">Session Analysis</h3>
+                            <p class="text-sm text-gray-600">Notes insights with AI</p>
+                        </div>
+                    </div>
+                </button>
+            </div>
+            
+            <!-- AI Response Area -->
+            <div id="ai-response-area" class="hidden">
+                <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <span class="material-icons text-indigo-600">psychology</span>
+                        <h3 class="font-medium">AI Response</h3>
+                        <div id="ai-loading" class="hidden">
+                            <div class="spinner"></div>
+                        </div>
+                    </div>
+                    <div id="ai-response-content" class="prose max-w-none"></div>
+                </div>
+                <button id="ai-new-query-btn" class="text-indigo-600 hover:text-indigo-800 text-sm">
+                    Ask another question
+                </button>
+            </div>
+            
+            <!-- Client Communication Form -->
+            <div id="ai-communication-form" class="hidden space-y-4">
+                <div>
+                    <label for="ai-client-select" class="block text-sm font-medium text-gray-700">Select Client</label>
+                    <select id="ai-client-select" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                        <!-- Clients will be populated here -->
+                    </select>
+                </div>
+                <div>
+                    <label for="ai-message-purpose" class="block text-sm font-medium text-gray-700">Purpose</label>
+                    <select id="ai-message-purpose" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                        <option value="reminder">Appointment Reminder</option>
+                        <option value="follow-up">Session Follow-up</option>
+                        <option value="confirmation">Appointment Confirmation</option>
+                        <option value="reschedule">Reschedule Request</option>
+                    </select>
+                </div>
+                <button id="ai-generate-message-btn" class="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700">
+                    Generate Message
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Appointment Details Modal -->
+    <div id="appointment-details-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-40">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-gray-800">Appointment Details</h2>
+                    <button id="close-details-modal" class="text-gray-500 hover:text-gray-700">
+                        <span class="material-icons">close</span>
+                    </button>
+                </div>
+                
+                <div id="appointment-details-content" class="space-y-4">
+                    <!-- Content will be populated dynamically -->
+                </div>
+                
+                <div class="flex space-x-3 mt-6">
+                    <button id="edit-appointment-details-btn" class="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700">
+                        Edit
+                    </button>
+                    <button id="delete-appointment-details-btn" class="flex-1 bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700">
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Voice Assistant Modal -->
+    <div id="voice-assistant-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-40">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold flex items-center space-x-2">
+                    <span class="material-icons text-indigo-600">mic</span>
+                    <span>Voice Assistant</span>
+                </h2>
+                <button id="close-voice-modal-btn" class="text-gray-500 hover:text-gray-700">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            
+            <div class="text-center space-y-4">
+                <div id="voice-status-display" class="text-lg font-medium text-gray-700">
+                    Tap the microphone to start
+                </div>
+                
+                <div class="flex items-center justify-center space-x-4">
+                    <button id="voice-record-btn" class="w-20 h-20 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors duration-200">
+                        <span id="voice-record-icon" class="material-icons text-3xl text-gray-600">mic</span>
+                    </button>
+                    <button id="continue-conversation-btn" class="w-16 h-16 rounded-full bg-blue-100 hover:bg-blue-200 flex items-center justify-center transition-colors duration-200 hidden" title="Continue Conversation">
+                        <span class="material-icons text-2xl text-blue-600">chat</span>
+                    </button>
+                </div>
+                
+                <div id="voice-transcript" class="p-4 bg-gray-50 rounded-lg min-h-[100px] text-left hidden">
+                    <h3 class="font-medium text-gray-700 mb-2">Transcript:</h3>
+                    <p id="transcript-text" class="text-gray-800"></p>
+                </div>
+                
+                <div id="voice-response" class="p-4 bg-blue-50 rounded-lg text-left hidden">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-medium text-blue-700">AI Response:</h3>
+                        <button id="popup-response-btn" class="text-blue-600 hover:text-blue-800 text-sm flex items-center space-x-1 hidden" title="Open in popup">
+                            <span class="material-icons text-lg">open_in_new</span>
+                            <span>Expand</span>
+                        </button>
+                    </div>
+                    <div id="response-container" class="max-h-48 overflow-y-auto">
+                        <p id="response-text" class="text-blue-800 whitespace-pre-wrap"></p>
+                    </div>
+                </div>
+                
+                <div id="voice-loading" class="flex items-center justify-center space-x-2 hidden">
+                    <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>
+                    <span class="text-gray-600">Processing...</span>
+                </div>
+                
+                <div id="appointment-confirmation" class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg hidden">
+                    <h3 class="font-medium text-yellow-800 mb-2 text-sm">Confirm Appointment Details</h3>
+                    <div id="appointment-details" class="space-y-1 text-xs text-yellow-700 mb-3">
+                        <!-- Appointment details will be populated here -->
+                    </div>
+                    <div class="flex space-x-2">
+                        <button id="confirm-appointment-btn" class="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700">
+                            Confirm & Create
+                        </button>
+                        <button id="cancel-voice-appointment-btn" class="px-3 py-1.5 text-sm bg-gray-600 text-white rounded hover:bg-gray-700">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Notes Analysis Modal -->
+    <div id="ai-notes-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-40">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">AI Session Analysis</h2>
+                <button id="close-ai-notes-btn" class="text-gray-500 hover:text-gray-700">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div id="ai-notes-content" class="space-y-4">
+                <!-- AI analysis will be displayed here -->
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button id="ai-notes-close-btn" class="bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300">Close</button>
+            </div>
+        </div>
+    </div>
+
+
+
+    <!-- AI Response Popup Modal -->
+    <div id="ai-response-popup" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl h-4/5 flex flex-col">
+            <div class="flex justify-between items-center p-6 border-b border-gray-200">
+                <h2 class="text-xl font-bold text-gray-800 flex items-center space-x-2">
+                    <span class="material-icons text-blue-600">smart_toy</span>
+                    <span>AI Assistant Response</span>
+                </h2>
+                <button id="close-popup-btn" class="text-gray-500 hover:text-gray-700">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="flex-1 p-6 overflow-y-auto">
+                <div id="popup-response-content" class="text-gray-800 whitespace-pre-wrap leading-relaxed"></div>
+            </div>
+            <div class="p-6 border-t border-gray-200 flex justify-end space-x-3">
+                <button id="copy-response-btn" class="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 flex items-center space-x-2">
+                    <span class="material-icons text-sm">content_copy</span>
+                    <span>Copy Text</span>
+                </button>
+                <button id="close-popup-footer-btn" class="bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    </div> <!-- End main-app -->
+
+    <!-- Scripts -->
+    <script src="/env.js"></script>
+    <script type="module" src="firebase-config.js"></script>
+    <script src="tts-service.js"></script>
+    <script type="module" src="ai-assistant.js"></script>
+    <script type="module" src="app.js"></script>
+    
+    <!-- Authentication Script -->
+    <script type="module">
+        import { auth, onAuthStateChanged, signOut } from './firebase-config.js';
+
+        let currentUser = null;
+
+        // Check authentication state
+        onAuthStateChanged(auth, (user) => {
+            const authLoading = document.getElementById('auth-loading');
+            const mainApp = document.getElementById('main-app');
+            
+            if (user) {
+                // User is signed in
+                currentUser = user;
+                console.log('User authenticated:', user.email);
+                
+                // Show main app
+                authLoading.classList.add('hidden');
+                mainApp.classList.remove('hidden');
+                
+                // Add user info to header if it exists
+                addUserInfo(user);
+                
+            } else {
+                // User is not signed in - redirect to login
+                console.log('User not authenticated, redirecting to login');
+                window.location.href = '/login.html';
+            }
+        });
+
+        function addUserInfo(user) {
+            // Find a good place to add user info in the header
+            const header = document.querySelector('header');
+            if (header && !document.getElementById('user-info')) {
+                const userInfo = document.createElement('div');
+                userInfo.id = 'user-info';
+                userInfo.className = 'flex items-center space-x-3';
+                
+                const email = user.email;
+                const displayName = email.split('@')[0]; // Use part before @ as display name
+                
+                userInfo.innerHTML = `
+                    <div class="flex items-center space-x-2">
+                        <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                            <span class="text-white text-sm font-medium">${displayName[0].toUpperCase()}</span>
+                        </div>
+                        <span class="text-gray-700 font-medium text-sm">${displayName}</span>
+                    </div>
+                    <button id="logout-btn" class="text-gray-600 hover:text-gray-900 text-sm font-medium">
+                        Sign Out
+                    </button>
+                `;
+                
+                header.appendChild(userInfo);
+                
+                // Add logout functionality
+                document.getElementById('logout-btn').addEventListener('click', async () => {
+                    try {
+                        await signOut(auth);
+                        window.location.href = '/login.html';
+                    } catch (error) {
+                        console.error('Logout error:', error);
+                    }
+                });
+            }
+        }
+
+        // Make current user available globally for other scripts
+        window.getCurrentUser = () => currentUser;
+    </script>
+</body>
+</html>

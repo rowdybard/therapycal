@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Therapy Calendar</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Using the single, bundled FullCalendar script -->
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+    <!-- Firebase SDKs -->
+    <script type="module" src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js"></script>
+    <script type="module" src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"></script>
+    <script type="module" src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Mulish:wght@400;500;600;700&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Mulish', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        #client-notes, #appointment-notes {
+            font-family: 'Quicksand', sans-serif;
+        }
+
+        /* FullCalendar Customizations */
+        :root {
+            --fc-border-color: #e2e8f0;
+            --fc-daygrid-event-dot-width: 8px;
+            --fc-list-event-dot-width: 10px;
+            --fc-event-bg-color: #4f46e5;
+            --fc-event-border-color: #4f46e5;
+            --fc-event-text-color: #ffffff;
+            --fc-button-bg-color: #4f46e5;
+            --fc-button-active-bg-color: #4338ca;
+            --fc-today-bg-color: rgba(239, 246, 255, 0.7);
+        }
+        
+        .fc-event {
+            cursor: pointer;
+            border-radius: 4px;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+        
+        .fc-event-title {
+            flex-grow: 1;
+        }
+
+        .fc-event .material-icons {
+            font-size: 1em;
+            margin-left: 4px;
+        }
+
+        .priority-dot {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            border: 1px solid white;
+        }
+
+        .fc-daygrid-day-frame:hover,
+        .fc-timegrid-slot-lane:hover {
+            background-color: #f9fafb;
+            cursor: pointer;
+        }
+        
+        /* Sidebar and Layout */
+        #sidebar {
+            transition: transform 0.3s ease-in-out;
+        }
+        
+        @media (max-width: 768px) {
+            #sidebar {
+                transform: translateX(-100%);
+            }
+            #sidebar.open {
+                transform: translateX(0);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen overflow-hidden flex">
+
+    <aside id="sidebar" class="bg-white w-80 h-full flex flex-col border-r border-gray-200 absolute md:relative z-20 md:z-auto">
+        <div class="p-4 border-b border-gray-200 flex-shrink-0">
+            <h1 class="text-2xl font-bold text-gray-800">TherapyCal</h1>
+            <p class="text-sm text-gray-500">Your scheduling assistant</p>
+        </div>
+
+        <div class="p-4 border-b border-gray-200 flex justify-between items-center flex-shrink-0">
+            <div>
+                <h3 class="font-semibold text-gray-700">Weekly Summary</h3>
+                <p id="weekly-summary" class="text-gray-600">Total Hours: <span class="font-bold">0h</span></p>
+            </div>
+            <button id="settings-btn" class="text-gray-500 hover:text-gray-800">
+                <span class="material-icons">settings</span>
+            </button>
+        </div>
+
+        <div class="flex-1 p-4 overflow-y-auto min-h-0">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-lg font-semibold text-gray-700">Clients</h2>
+                <button id="add-client-btn" class="text-indigo-600 hover:text-indigo-800">
+                    <span class="material-icons">add</span>
+                </button>
+            </div>
+             <div class="mb-4">
+                <label for="client-filter" class="block text-sm font-medium text-gray-700">Filter by Client</label>
+                <select id="client-filter" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                    <option value="all">All Clients</option>
+                </select>
+            </div>
+            <div id="client-list" class="space-y-2">
+                </div>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-screen">
+        <header class="bg-white p-2 border-b border-gray-200 flex flex-col md:flex-row md:items-center md:justify-between space-y-2 md:space-y-0">
+            <div class="flex items-center justify-between w-full">
+                <div class="flex items-center space-x-2">
+                    <button id="menu-toggle-btn" class="md:hidden p-2 text-gray-600">
+                        <span class="material-icons">menu</span>
+                    </button>
+                    <h2 id="calendar-title" class="text-lg font-semibold text-gray-800"></h2>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button id="today-btn" class="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300">Today</button>
+                    <button id="prev-btn" class="p-1.5 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300"><span class="material-icons">chevron_left</span></button>
+                    <button id="next-btn" class="p-1.5 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300"><span class="material-icons">chevron_right</span></button>
+                </div>
+            </div>
+            <div class="flex items-center justify-between w-full">
+                <div class="flex items-center space-x-1" id="view-switcher">
+                    <!-- View buttons will be injected here -->
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button id="new-appointment-btn" class="flex items-center space-x-1 bg-indigo-600 text-white px-3 py-1.5 rounded-md hover:bg-indigo-700 transition-colors">
+                        <span class="material-icons text-base">add</span>
+                        <span class="text-sm font-medium">New Appointment</span>
+                    </button>
+                    <button id="undo-btn" class="flex items-center space-x-1 bg-gray-200 text-gray-700 px-3 py-1.5 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                        <span class="material-icons text-base">undo</span>
+                        <span class="text-sm font-medium">Undo</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <div class="flex-grow p-4 overflow-auto">
+            <div id='calendar' class="bg-white rounded-lg shadow-sm h-full"></div>
+        </div>
+    </main>
+    
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-10 hidden md:hidden"></div>
+
+    <div id="client-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-30">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h2 class="text-xl font-bold mb-4" id="client-modal-title">Add Client</h2>
+            <form id="client-form">
+                <input type="hidden" id="client-id">
+                <div class="space-y-4">
+                    <div>
+                        <label for="client-name" class="block text-sm font-medium text-gray-700">Name</label>
+                        <input type="text" id="client-name" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3" required>
+                    </div>
+                    <div>
+                        <label for="client-email" class="block text-sm font-medium text-gray-700">Email</label>
+                        <input type="email" id="client-email" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                    </div>
+                    <div>
+                        <label for="client-phone" class="block text-sm font-medium text-gray-700">Phone</label>
+                        <input type="tel" id="client-phone" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                    </div>
+                    <div>
+                        <label for="client-color" class="block text-sm font-medium text-gray-700">Label Color</label>
+                        <input type="color" id="client-color" value="#4f46e5" class="mt-1 block w-full h-10 border border-gray-300 rounded-md">
+                    </div>
+                    <div>
+                        <label for="client-notes" class="block text-sm font-medium text-gray-700">General Notes</label>
+                        <textarea id="client-notes" rows="4" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"></textarea>
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-between">
+                    <button type="button" id="delete-client-btn" class="bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 hidden">Delete</button>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" id="cancel-client-btn" class="bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300">Cancel</button>
+                        <button type="submit" class="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700">Save</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="appointment-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-30">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h2 class="text-xl font-bold mb-4" id="appointment-modal-title">New Appointment</h2>
+            <form id="appointment-form">
+                <input type="hidden" id="appointment-id">
+                <div class="space-y-4">
+                    <div id="appointment-no-clients-msg" class="hidden text-center p-4 bg-yellow-100 text-yellow-800 rounded-md">
+                        Please add a client first before creating an appointment.
+                    </div>
+                    <div id="conflict-warning" class="hidden text-center p-4 bg-red-100 text-red-800 rounded-md">
+                        This appointment overlaps with another session.
+                    </div>
+                    <div>
+                        <label for="appointment-client" class="block text-sm font-medium text-gray-700">Client</label>
+                        <select id="appointment-client" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3" required></select>
+                    </div>
+                    <div>
+                        <label for="appointment-start" class="block text-sm font-medium text-gray-700">Start Time</label>
+                        <input type="datetime-local" id="appointment-start" step="300" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3" required>
+                    </div>
+                    <div>
+                        <label for="appointment-duration" class="block text-sm font-medium text-gray-700">Duration (minutes)</label>
+                        <input type="number" id="appointment-duration" value="50" step="5" min="5" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3" required>
+                    </div>
+                     <div>
+                        <label for="appointment-repeats" class="block text-sm font-medium text-gray-700">Repeats</label>
+                        <select id="appointment-repeats" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                            <option value="none">Never</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="biweekly">Biweekly</option>
+                            <option value="monthly">Monthly</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="service-type" class="block text-sm font-medium text-gray-700">Service Type</label>
+                            <select id="service-type" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                                <option>Individual</option>
+                                <option>Couples</option>
+                                <option>Initial Consultation</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="priority-status" class="block text-sm font-medium text-gray-700">Priority</label>
+                            <select id="priority-status" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                                <option value="not-billed">Not Billed</option>
+                                <option value="billed">Billed</option>
+                                <option value="paid">Paid</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="appointment-notes" class="block text-sm font-medium text-gray-700">Notes for this Session</label>
+                        <textarea id="appointment-notes" rows="3" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"></textarea>
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-between items-center">
+                    <button type="button" id="delete-appointment-btn" class="bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 hidden">Delete</button>
+                    <div class="flex-grow flex flex-col items-end">
+                        <div id="edit-series-container" class="hidden items-center mb-2">
+                           <input id="edit-all-series" type="checkbox" class="h-4 w-4 text-indigo-600 border-gray-300 rounded">
+                           <label for="edit-all-series" class="ml-2 block text-sm text-gray-900">Edit All</label>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button type="button" id="cancel-appointment-btn" class="bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300">Cancel</button>
+                            <button type="submit" class="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700">Save</button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-30">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h2 class="text-xl font-bold mb-4">Settings</h2>
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <label for="conflict-handling-toggle" class="text-sm font-medium text-gray-700">Enable Advanced Conflict Handling</label>
+                    <input type="checkbox" id="conflict-handling-toggle" class="h-4 w-4 text-indigo-600 border-gray-300 rounded">
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button type="button" id="close-settings-btn" class="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirmation-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-40">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm">
+            <h2 class="text-lg font-bold mb-4" id="confirmation-title">Are you sure?</h2>
+            <p id="confirmation-message" class="text-sm text-gray-600 mb-6"></p>
+            <div class="flex justify-end space-x-3" id="confirmation-buttons">
+                <!-- Buttons will be injected here -->
+            </div>
+        </div>
+    </div>
+    
+    <script type="module">
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- DOM Elements ---
+            const calendarEl = document.getElementById('calendar');
+            const sidebar = document.getElementById('sidebar');
+            const menuToggleBtn = document.getElementById('menu-toggle-btn');
+            const sidebarOverlay = document.getElementById('sidebar-overlay');
+            const addClientBtn = document.getElementById('add-client-btn');
+            const clientModal = document.getElementById('client-modal');
+            const clientForm = document.getElementById('client-form');
+            const cancelClientBtn = document.getElementById('cancel-client-btn');
+            const deleteClientBtn = document.getElementById('delete-client-btn');
+            const clientListEl = document.getElementById('client-list');
+            const appointmentModal = document.getElementById('appointment-modal');
+            const appointmentForm = document.getElementById('appointment-form');
+            const cancelAppointmentBtn = document.getElementById('cancel-appointment-btn');
+            const deleteAppointmentBtn = document.getElementById('delete-appointment-btn');
+            const weeklySummaryEl = document.getElementById('weekly-summary').querySelector('span');
+            const undoBtn = document.getElementById('undo-btn');
+            const newAppointmentBtn = document.getElementById('new-appointment-btn');
+            const clientFilterEl = document.getElementById('client-filter');
+            const editSeriesContainer = document.getElementById('edit-series-container');
+            const calendarTitleEl = document.getElementById('calendar-title');
+            const prevBtn = document.getElementById('prev-btn');
+            const nextBtn = document.getElementById('next-btn');
+            const todayBtn = document.getElementById('today-btn');
+            const viewSwitcherEl = document.getElementById('view-switcher');
+            const settingsBtn = document.getElementById('settings-btn');
+            const settingsModal = document.getElementById('settings-modal');
+            const closeSettingsBtn = document.getElementById('close-settings-btn');
+            const conflictToggle = document.getElementById('conflict-handling-toggle');
+            const conflictWarningEl = document.getElementById('conflict-warning');
+            const confirmationModal = document.getElementById('confirmation-modal');
+            const confirmationTitle = document.getElementById('confirmation-title');
+            const confirmationMessage = document.getElementById('confirmation-message');
+            const confirmationButtons = document.getElementById('confirmation-buttons');
+
+            // --- Data & Settings Management ---
+            let clients = JSON.parse(localStorage.getItem('therapyClients')) || [];
+            let events = JSON.parse(localStorage.getItem('therapyEvents')) || [];
+            let undoStack = JSON.parse(localStorage.getItem('therapyUndoStack')) || [];
+            let settings = JSON.parse(localStorage.getItem('therapySettings')) || {
+                conflictHandling: true
+            };
+            const MAX_UNDO_STATES = 10;
+            
+            let calendar;
+
+            function saveData() {
+                localStorage.setItem('therapyClients', JSON.stringify(clients));
+                localStorage.setItem('therapyEvents', JSON.stringify(events));
+                localStorage.setItem('therapyUndoStack', JSON.stringify(undoStack));
+                localStorage.setItem('therapySettings', JSON.stringify(settings));
+            }
+
+            function saveState() {
+                const state = {
+                    clients: JSON.parse(JSON.stringify(clients)),
+                    events: JSON.parse(JSON.stringify(events))
+                };
+                undoStack.push(state);
+                if (undoStack.length > MAX_UNDO_STATES) {
+                    undoStack.shift();
+                }
+                updateUndoButton();
+                saveData();
+            }
+
+            function undo() {
+                if (undoStack.length <= 1) return; 
+                
+                undoStack.pop(); 
+                const lastState = undoStack[undoStack.length-1]; 
+                
+                if (lastState) {
+                    clients = lastState.clients;
+                    events = lastState.events;
+                } else { 
+                    clients = [];
+                    events = [];
+                }
+
+                calendar.refetchEvents();
+                renderClientList();
+                updateWeeklySummary();
+                updateUndoButton();
+                saveData(); 
+            }
+            
+            function updateUndoButton() {
+                undoBtn.disabled = undoStack.length <= 1;
+            }
+
+            // --- Client Management Functions ---
+            function renderClientList() {
+                clientListEl.innerHTML = '';
+                clientFilterEl.innerHTML = '<option value="all">All Clients</option>';
+
+                if (clients.length === 0) {
+                    clientListEl.innerHTML = `<p class="text-sm text-gray-500">No clients yet.</p>`;
+                    return;
+                }
+                clients.forEach(client => {
+                    const clientEl = document.createElement('div');
+                    clientEl.className = 'flex items-center justify-between p-2 rounded-md hover:bg-gray-100 cursor-pointer';
+                    clientEl.dataset.clientId = client.id;
+                    clientEl.innerHTML = `
+                        <div class="flex items-center space-x-3">
+                            <span class="w-3 h-3 rounded-full" style="background-color: ${client.color};"></span>
+                            <span class="font-medium text-gray-700">${client.name}</span>
+                        </div>
+                        <button class="edit-client-btn text-gray-400 hover:text-gray-600">
+                            <span class="material-icons text-lg">edit</span>
+                        </button>
+                    `;
+                    clientEl.querySelector('.edit-client-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        openClientModal(client.id);
+                    });
+                    clientListEl.appendChild(clientEl);
+
+                    const filterOption = document.createElement('option');
+                    filterOption.value = client.id;
+                    filterOption.textContent = client.name;
+                    clientFilterEl.appendChild(filterOption);
+                });
+            }
+
+            function openClientModal(clientId = null) {
+                clientForm.reset();
+                document.getElementById('client-id').value = '';
+                deleteClientBtn.classList.add('hidden');
+
+                if (clientId) {
+                    const client = clients.find(c => c.id === clientId);
+                    if (client) {
+                        document.getElementById('client-modal-title').textContent = 'Edit Client';
+                        document.getElementById('client-id').value = client.id;
+                        document.getElementById('client-name').value = client.name;
+                        document.getElementById('client-email').value = client.email || '';
+                        document.getElementById('client-phone').value = client.phone || '';
+                        document.getElementById('client-color').value = client.color;
+                        document.getElementById('client-notes').value = client.notes || '';
+                        deleteClientBtn.classList.remove('hidden');
+                    }
+                } else {
+                    document.getElementById('client-modal-title').textContent = 'Add Client';
+                    document.getElementById('client-color').value = `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`;
+                }
+                clientModal.classList.remove('hidden');
+            }
+
+            function closeClientModal() {
+                clientModal.classList.add('hidden');
+            }
+            
+            function openAppointmentModal(info) {
+                appointmentForm.reset();
+                document.getElementById('appointment-id').value = '';
+                deleteAppointmentBtn.classList.add('hidden');
+                editSeriesContainer.classList.add('hidden');
+                document.getElementById('edit-all-series').checked = false;
+                conflictWarningEl.classList.add('hidden');
+                
+                const clientDropdown = document.getElementById('appointment-client');
+                const noClientsMsg = document.getElementById('appointment-no-clients-msg');
+                const appointmentSubmitBtn = appointmentForm.querySelector('button[type="submit"]');
+
+                if (clients.length === 0) {
+                    clientDropdown.classList.add('hidden');
+                    noClientsMsg.classList.remove('hidden');
+                    appointmentSubmitBtn.disabled = true;
+                    appointmentSubmitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                } else {
+                    clientDropdown.classList.remove('hidden');
+                    noClientsMsg.classList.add('hidden');
+                    appointmentSubmitBtn.disabled = false;
+                    appointmentSubmitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+                    clientDropdown.innerHTML = '<option value="">Select a client...</option>';
+                    clients.forEach(c => {
+                        const option = document.createElement('option');
+                        option.value = c.id;
+                        option.textContent = c.name;
+                        clientDropdown.appendChild(option);
+                    });
+                }
+
+                if (info.event) { 
+                    const sourceEvent = events.find(e => e.groupId === info.event.groupId) || events.find(e => e.id === info.event.id);
+                    const instanceEvent = events.find(e => e.id === info.event.id);
+
+                    document.getElementById('appointment-modal-title').textContent = 'Edit Appointment';
+                    document.getElementById('appointment-id').value = info.event.id;
+                    clientDropdown.value = sourceEvent.extendedProps.clientId;
+                    document.getElementById('appointment-start').value = info.event.startStr.substring(0, 16);
+                    const duration = (info.event.end - info.event.start) / 60000;
+                    document.getElementById('appointment-duration').value = duration;
+                    document.getElementById('appointment-repeats').value = sourceEvent.extendedProps.recurring || 'none';
+                    document.getElementById('appointment-notes').value = instanceEvent?.extendedProps.notes || sourceEvent.extendedProps.notes || '';
+                    document.getElementById('service-type').value = sourceEvent.extendedProps.serviceType || 'Individual';
+                    document.getElementById('priority-status').value = sourceEvent.extendedProps.priority || 'not-billed';
+                    
+                    if(sourceEvent.groupId) {
+                        deleteAppointmentBtn.classList.remove('hidden');
+                        editSeriesContainer.classList.remove('hidden');
+                    } else {
+                        deleteAppointmentBtn.classList.remove('hidden');
+                    }
+
+                } else { 
+                    document.getElementById('appointment-modal-title').textContent = 'New Appointment';
+                    const start = new Date(info.start || info.date); 
+                    const end = info.end ? new Date(info.end) : null;
+
+                    if (info.allDay) {
+                        start.setHours(9, 0, 0, 0);
+                    } else {
+                        const minutes = start.getMinutes();
+                        const roundedMinutes = Math.round(minutes / 5) * 5;
+                        start.setMinutes(roundedMinutes, 0, 0);
+                    }
+                    
+                    const year = start.getFullYear();
+                    const month = String(start.getMonth() + 1).padStart(2, '0');
+                    const day = String(start.getDate()).padStart(2, '0');
+                    const hours = String(start.getHours()).padStart(2, '0');
+                    const minutes = String(start.getMinutes()).padStart(2, '0');
+                    const localISOTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+                    
+                    document.getElementById('appointment-start').value = localISOTime;
+                    
+                    if(end) {
+                        document.getElementById('appointment-duration').value = (end - start) / 60000;
+                    } else {
+                        document.getElementById('appointment-duration').value = 50;
+                    }
+                }
+                
+                appointmentModal.classList.remove('hidden');
+                checkConflict();
+            }
+            
+            function closeAppointmentModal() {
+                appointmentModal.classList.add('hidden');
+            }
+
+            // --- UI & Responsiveness Functions ---
+            function handleResize() {
+                const currentView = calendar.view.type;
+                if (window.innerWidth < 768 && currentView !== 'timeGridDay') {
+                    calendar.changeView('timeGridDay');
+                } else if (window.innerWidth >= 768 && currentView === 'timeGridDay') {
+                    calendar.changeView('rollingWeek');
+                }
+
+                if (window.innerWidth >= 768) {
+                    sidebar.classList.remove('open');
+                    sidebarOverlay.classList.add('hidden');
+                }
+            }
+            
+            function updateWeeklySummary() {
+                const view = calendar.view;
+                const start = view.activeStart;
+                const end = view.activeEnd;
+                let totalMinutes = 0;
+
+                const allEvents = calendar.getEvents();
+                allEvents.forEach(event => {
+                    const eventStart = event.start;
+                    if (eventStart >= start && eventStart < end) {
+                        const duration = (event.end - eventStart) / 60000;
+                        totalMinutes += duration;
+                    }
+                });
+
+                const hours = totalMinutes / 60;
+                weeklySummaryEl.textContent = `${hours.toFixed(2)}h`;
+            }
+
+            function checkConflict() {
+                if (!settings.conflictHandling) {
+                    conflictWarningEl.classList.add('hidden');
+                    appointmentForm.querySelector('button[type="submit"]').disabled = false;
+                    return;
+                }
+
+                const start = new Date(document.getElementById('appointment-start').value);
+                const duration = parseInt(document.getElementById('appointment-duration').value, 10);
+                const end = new Date(start.getTime() + duration * 60000);
+                const currentId = document.getElementById('appointment-id').value;
+
+                const allCalEvents = calendar.getEvents();
+                const hasConflict = allCalEvents.some(calEvent => {
+                    if (calEvent.id === currentId) return false;
+                    return (start < calEvent.end && end > calEvent.start);
+                });
+
+                if (hasConflict) {
+                    conflictWarningEl.classList.remove('hidden');
+                    appointmentForm.querySelector('button[type="submit"]').disabled = true;
+                } else {
+                    conflictWarningEl.classList.add('hidden');
+                    appointmentForm.querySelector('button[type="submit"]').disabled = false;
+                }
+            }
+
+            // --- Event Listeners Setup ---
+            clientForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                saveState(); 
+                const clientId = document.getElementById('client-id').value;
+                const clientData = {
+                    id: clientId || `client_${Date.now()}`,
+                    name: document.getElementById('client-name').value,
+                    email: document.getElementById('client-email').value,
+                    phone: document.getElementById('client-phone').value,
+                    color: document.getElementById('client-color').value,
+                    notes: document.getElementById('client-notes').value,
+                };
+
+                if (clientId) {
+                    clients = clients.map(c => c.id === clientId ? clientData : c);
+                } else {
+                    clients.push(clientData);
+                }
+                
+                renderClientList();
+                calendar.refetchEvents();
+                closeClientModal();
+                saveData();
+            });
+            
+            deleteClientBtn.addEventListener('click', () => {
+                 showConfirmationModal(
+                    'Delete Client?',
+                    'This will delete the client and all their appointments. This action cannot be undone.',
+                    [
+                        {
+                            text: 'Delete',
+                            class: 'bg-red-600 text-white',
+                            action: () => {
+                                saveState();
+                                const clientId = document.getElementById('client-id').value;
+                                clients = clients.filter(c => c.id !== clientId);
+                                events = events.filter(e => e.extendedProps.clientId !== clientId);
+
+                                renderClientList();
+                                calendar.refetchEvents();
+                                closeClientModal();
+                                saveData();
+                            }
+                        }
+                    ]
+                );
+            });
+
+            appointmentForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                saveState();
+                
+                const appointmentId = document.getElementById('appointment-id').value;
+                const start = new Date(document.getElementById('appointment-start').value);
+                const duration = parseInt(document.getElementById('appointment-duration').value, 10);
+                const end = new Date(start.getTime() + duration * 60000);
+                const clientId = document.getElementById('appointment-client').value;
+                const recurring = document.getElementById('appointment-repeats').value;
+                const notes = document.getElementById('appointment-notes').value;
+                const serviceType = document.getElementById('service-type').value;
+                const priority = document.getElementById('priority-status').value;
+                const editAll = document.getElementById('edit-all-series').checked;
+                
+                if (!clientId) {
+                    alert("Please select a client.");
+                    return;
+                }
+                
+                const instance = calendar.getEventById(appointmentId);
+                const sourceEvent = instance ? events.find(ev => ev.groupId === instance.groupId) : undefined;
+                
+                if (sourceEvent && !editAll) {
+                    const newId = `event_${Date.now()}`;
+                    const updatedEvent = {
+                        id: newId,
+                        start: start.toISOString(),
+                        end: end.toISOString(),
+                        extendedProps: { 
+                            clientId: clientId, 
+                            recurring: 'none',
+                            notes: notes,
+                            serviceType: serviceType,
+                            priority: priority,
+                            originalId: sourceEvent.id
+                        },
+                        groupId: ''
+                    };
+                    events = [...events, updatedEvent];
+                    
+                    sourceEvent.extendedProps.exceptionDates = sourceEvent.extendedProps.exceptionDates || [];
+                    sourceEvent.extendedProps.exceptionDates.push(instance.start.toISOString().split('T')[0]);
+                } else {
+                    if(sourceEvent && editAll) {
+                        events = events.filter(ev => ev.groupId !== sourceEvent.groupId);
+                    } else if (instance) {
+                        const originalId = instance.extendedProps.originalId;
+                        events = events.filter(ev => ev.id !== appointmentId);
+                        if(originalId) {
+                            const originalSeries = events.find(ev => ev.id === originalId);
+                            if(originalSeries) {
+                                originalSeries.extendedProps.exceptionDates = originalSeries.extendedProps.exceptionDates.filter(d => d !== instance.start.toISOString().split('T')[0]);
+                            }
+                        }
+                    }
+
+                    const newGroupId = recurring !== 'none' ? (sourceEvent?.groupId || `group_${Date.now()}`) : '';
+                    const eventData = {
+                        id: `event_${Date.now()}`,
+                        start: start.toISOString(),
+                        end: end.toISOString(),
+                        extendedProps: {
+                            clientId: clientId,
+                            recurring: recurring,
+                            notes: notes,
+                            serviceType: serviceType,
+                            priority: priority,
+                        },
+                        groupId: newGroupId
+                    };
+                    events = [...events, eventData];
+                }
+                
+                calendar.refetchEvents();
+                updateWeeklySummary();
+                closeAppointmentModal();
+                saveData();
+            });
+            
+            deleteAppointmentBtn.addEventListener('click', () => {
+                const appointmentId = document.getElementById('appointment-id').value;
+                const instance = calendar.getEventById(appointmentId);
+                const sourceEvent = instance ? events.find(ev => ev.groupId === instance.groupId) : undefined;
+
+                if (sourceEvent) {
+                    showConfirmationModal(
+                        'Delete Appointment',
+                        'Do you want to delete only this instance or the entire series?',
+                        [
+                            {
+                                text: 'Delete Series',
+                                class: 'bg-red-600 text-white',
+                                action: () => {
+                                    events = events.filter(ev => ev.groupId !== sourceEvent.groupId);
+                                    finishDelete();
+                                }
+                            },
+                            {
+                                text: 'Delete This Event',
+                                class: 'bg-gray-200 text-gray-800',
+                                action: () => {
+                                    sourceEvent.extendedProps.exceptionDates = sourceEvent.extendedProps.exceptionDates || [];
+                                    sourceEvent.extendedProps.exceptionDates.push(instance.start.toISOString().split('T')[0]);
+                                    finishDelete();
+                                }
+                            }
+                        ]
+                    );
+                } else {
+                    showConfirmationModal(
+                        'Delete Appointment?',
+                        'This action cannot be undone.',
+                        [
+                            {
+                                text: 'Delete',
+                                class: 'bg-red-600 text-white',
+                                action: () => {
+                                    events = events.filter(e => e.id !== appointmentId);
+                                    finishDelete();
+                                }
+                            }
+                        ]
+                    );
+                }
+
+                function finishDelete() {
+                    saveState();
+                    calendar.refetchEvents();
+                    updateWeeklySummary();
+                    closeAppointmentModal();
+                    saveData();
+                }
+            });
+
+            newAppointmentBtn.addEventListener('click', () => {
+                const now = new Date();
+                const info = { date: now, allDay: true };
+                openAppointmentModal(info);
+            });
+
+            clientFilterEl.addEventListener('change', () => {
+                calendar.refetchEvents();
+            });
+
+            menuToggleBtn.addEventListener('click', () => {
+                sidebar.classList.toggle('open');
+                sidebarOverlay.classList.toggle('hidden');
+            });
+            sidebarOverlay.addEventListener('click', () => {
+                sidebar.classList.remove('open');
+                sidebarOverlay.classList.add('hidden');
+            });
+            addClientBtn.addEventListener('click', () => openClientModal());
+            cancelClientBtn.addEventListener('click', closeClientModal);
+            cancelAppointmentBtn.addEventListener('click', closeAppointmentModal);
+            undoBtn.addEventListener('click', undo);
+            window.addEventListener('resize', handleResize);
+            
+            // Settings Modal Listeners
+            settingsBtn.addEventListener('click', () => {
+                conflictToggle.checked = settings.conflictHandling;
+                settingsModal.classList.remove('hidden');
+            });
+            closeSettingsBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
+            
+            conflictToggle.addEventListener('change', (e) => {
+                settings.conflictHandling = e.target.checked;
+                saveData();
+                checkConflict();
+            });
+            
+            ['appointment-start', 'appointment-duration', 'appointment-client'].forEach(id => {
+                document.getElementById(id).addEventListener('change', checkConflict);
+            });
+
+            // --- Confirmation Modal ---
+            function showConfirmationModal(title, message, buttons) {
+                confirmationTitle.textContent = title;
+                confirmationMessage.textContent = message;
+                confirmationButtons.innerHTML = ''; // Clear old buttons
+
+                const cancelBtn = document.createElement('button');
+                cancelBtn.textContent = 'Cancel';
+                cancelBtn.className = 'bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300';
+                cancelBtn.onclick = () => confirmationModal.classList.add('hidden');
+                
+                buttons.forEach(btnInfo => {
+                    const button = document.createElement('button');
+                    button.textContent = btnInfo.text;
+                    button.className = `${btnInfo.class} py-2 px-4 rounded-md`;
+                    button.onclick = () => {
+                        btnInfo.action();
+                        confirmationModal.classList.add('hidden');
+                    };
+                    confirmationButtons.appendChild(button);
+                });
+
+                confirmationButtons.appendChild(cancelBtn);
+                confirmationModal.classList.remove('hidden');
+            }
+
+
+            // --- Calendar Initialization ---
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            
+            const initialViewMode = window.innerWidth < 768 ? 'timeGridDay' : 'rollingWeek';
+
+            calendar = new FullCalendar.Calendar(calendarEl, {
+                height: '100%',
+                headerToolbar: false,
+                views: {
+                    rollingWeek: {
+                        type: 'timeGrid',
+                        duration: { days: 7 },
+                        buttonText: 'Week'
+                    },
+                    rollingMonth: {
+                        type: 'dayGrid',
+                        duration: { weeks: 4 },
+                        buttonText: 'Month'
+                    }
+                },
+                initialView: initialViewMode,
+                slotDuration: '00:05:00',
+                slotMinTime: '09:00:00',
+                slotMaxTime: '22:00:00',
+                snapDuration: '00:05:00',
+                editable: true,
+                selectable: true, 
+                eventResizableFromStart: false, 
+                eventDurationEditable: false, 
+                eventOverlap: false,
+                validRange: {
+                    start: today
+                },
+                slotLabelFormat: {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    omitZeroMinute: false,
+                    meridiem: 'short'
+                },
+                events: function(fetchInfo, successCallback, failureCallback) {
+                    try {
+                        let processedEvents = [];
+                        const clientFilterId = clientFilterEl.value;
+
+                        const sourceEvents = clientFilterId === 'all' 
+                            ? events 
+                            : events.filter(e => e.extendedProps.clientId === clientFilterId);
+
+                        sourceEvents.forEach(event => {
+                            const recurringType = event.extendedProps.recurring;
+                            if (recurringType && recurringType !== 'none') {
+                                let current = new Date(event.start);
+                                const endDate = new Date();
+                                endDate.setMonth(endDate.getMonth() + 6);
+
+                                let instanceId = 1;
+                                while (current < endDate) {
+                                    const currentDateStr = current.toISOString().split('T')[0];
+                                    if (!event.extendedProps.exceptionDates?.includes(currentDateStr)) {
+                                        const newStart = new Date(current);
+                                        const newEnd = new Date(newStart.getTime() + (new Date(event.end) - new Date(event.start)));
+                                        
+                                        processedEvents.push({
+                                            ...event,
+                                            id: `${event.id}_${instanceId++}`,
+                                            groupId: event.groupId || event.id,
+                                            start: newStart,
+                                            end: newEnd
+                                        });
+                                    }
+
+                                    if(recurringType === 'weekly') {
+                                        current.setDate(current.getDate() + 7);
+                                    } else if (recurringType === 'biweekly') {
+                                        current.setDate(current.getDate() + 14);
+                                    } else if (recurringType === 'monthly') {
+                                        current.setMonth(current.getMonth() + 1);
+                                    }
+                                }
+                            } else {
+                                processedEvents.push(event);
+                            }
+                        });
+
+                        const formattedEvents = processedEvents.map(event => {
+                            const client = clients.find(c => c.id === event.extendedProps.clientId);
+                            const title = client ? client.name : 'Unknown Client';
+                            const icon = event.groupId ? `<span class="material-icons">repeat</span>` : '';
+                            const displayType = calendar.view.type === 'rollingMonth' ? 'background' : 'auto';
+                            const priority = event.extendedProps.priority || 'not-billed';
+                            const priorityColors = {
+                                'not-billed': 'bg-gray-400',
+                                'billed': 'bg-yellow-400',
+                                'paid': 'bg-green-400'
+                            };
+                            const priorityDot = `<div class="priority-dot ${priorityColors[priority]}"></div>`;
+
+                            return {
+                                ...event,
+                                backgroundColor: client ? client.color : '#6b7280',
+                                borderColor: client ? client.color : '#6b7280',
+                                title: title,
+                                display: displayType,
+                                eventContent: { html: `<div class="fc-event-main-frame"><div class="fc-event-title-container"><div class="fc-event-title fc-sticky">${title}</div></div> ${icon} ${priorityDot}</div>` }
+                            };
+                        });
+                        successCallback(formattedEvents);
+                    } catch (error) {
+                        console.error("Error fetching events:", error);
+                        failureCallback(error);
+                    }
+                },
+                
+                dateClick: openAppointmentModal,
+                eventClick: openAppointmentModal,
+                select: function(info) {
+                    openAppointmentModal(info);
+                },
+                eventDrop: function(info) {
+                    const sourceEvent = events.find(e => e.groupId === info.event.groupId);
+                    if (sourceEvent) {
+                        showConfirmationModal(
+                            'Move Recurring Series?',
+                            'Do you want to move the entire series to this new time?',
+                            [
+                                {
+                                    text: 'Move Series',
+                                    class: 'bg-indigo-600 text-white',
+                                    action: () => {
+                                        saveState();
+                                        const timeDiff = info.event.start.getTime() - info.oldEvent.start.getTime();
+                                        const newStart = new Date(new Date(sourceEvent.start).getTime() + timeDiff);
+                                        const newEnd = new Date(new Date(sourceEvent.end).getTime() + timeDiff);
+                                        sourceEvent.start = newStart.toISOString();
+                                        sourceEvent.end = newEnd.toISOString();
+                                        saveData();
+                                        calendar.refetchEvents();
+                                    }
+                                }
+                            ]
+                        );
+                        info.revert();
+                        return;
+                    }
+                    
+                    saveState();
+                    const eventToUpdate = events.find(e => e.id === info.event.id);
+                    if(eventToUpdate) {
+                        eventToUpdate.start = info.event.start.toISOString();
+                        eventToUpdate.end = info.event.end.toISOString();
+                    }
+                    
+                    saveData();
+                    updateWeeklySummary();
+                },
+                datesSet: function(dateInfo) {
+                    calendarTitleEl.textContent = dateInfo.view.title;
+                    updateWeeklySummary();
+                }
+            });
+
+            // --- Custom Header Logic ---
+            prevBtn.addEventListener('click', () => calendar.prev());
+            nextBtn.addEventListener('click', () => calendar.next());
+            todayBtn.addEventListener('click', () => calendar.today());
+            
+            function setupViewSwitcher() {
+                viewSwitcherEl.innerHTML = '';
+                const views = {
+                    'rollingMonth': 'Month',
+                    'rollingWeek': 'Week',
+                    'timeGridDay': 'Day'
+                };
+
+                for (const [viewName, viewLabel] of Object.entries(views)) {
+                    const button = document.createElement('button');
+                    button.textContent = viewLabel;
+                    button.dataset.view = viewName;
+                    button.className = 'px-3 py-1.5 text-sm font-medium rounded-md transition-colors';
+
+                    if (window.innerWidth < 768 && (viewName === 'rollingMonth' || viewName === 'rollingWeek')) {
+                       button.classList.add('hidden');
+                    }
+
+                    if (calendar.view.type === viewName) {
+                        button.classList.add('bg-indigo-600', 'text-white');
+                    } else {
+                        button.classList.add('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300');
+                    }
+
+                    button.addEventListener('click', (e) => {
+                        calendar.changeView(e.target.dataset.view);
+                        setupViewSwitcher();
+                    });
+                    viewSwitcherEl.appendChild(button);
+                }
+            }
+
+
+            // --- Initial Application Load ---
+            conflictToggle.checked = settings.conflictHandling;
+            calendar.render();
+            calendarTitleEl.textContent = calendar.view.title;
+            setupViewSwitcher();
+            renderClientList();
+            updateUndoButton();
+            updateWeeklySummary();
+            if (undoStack.length === 0) {
+                saveState();
+            }
+        });
+    </script>
+</body>
+</html>
