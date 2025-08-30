@@ -36,6 +36,82 @@ let currentSettings = {
 // Ensure we only initialize Firestore listeners once (after auth)
 let dataListenersInitialized = false;
 
+// Backend API configuration (Render Web Service)
+const API_BASE_URL = (typeof window !== 'undefined' && window.API_BASE_URL) ? window.API_BASE_URL : null;
+const useApiBackend = !!API_BASE_URL;
+
+// API helpers
+async function getAuthHeader() {
+    if (!auth || !auth.currentUser) throw new Error('Not authenticated');
+    const token = await auth.currentUser.getIdToken();
+    return { 'Authorization': `Bearer ${token}` };
+}
+
+async function apiRequest(path, options = {}) {
+    const headers = options.headers || {};
+    const authHeader = await getAuthHeader();
+    const resp = await fetch(`${API_BASE_URL}${path}`, {
+        ...options,
+        headers: {
+            'Content-Type': 'application/json',
+            ...authHeader,
+            ...headers
+        }
+    });
+    if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        throw new Error(`API ${resp.status}: ${text || resp.statusText}`);
+    }
+    if (resp.status === 204) return null;
+    return await resp.json();
+}
+
+async function apiGet(path) { return apiRequest(path, { method: 'GET' }); }
+async function apiPost(path, body) { return apiRequest(path, { method: 'POST', body: JSON.stringify(body) }); }
+async function apiPut(path, body) { return apiRequest(path, { method: 'PUT', body: JSON.stringify(body) }); }
+async function apiDelete(path) { return apiRequest(path, { method: 'DELETE' }); }
+
+async function loadDataFromApi() {
+    try {
+        showLoading();
+        const [clientsRes, providersRes, appointmentsRes] = await Promise.all([
+            apiGet('/api/clients'),
+            apiGet('/api/providers'),
+            apiGet('/api/appointments')
+        ]);
+
+        clients = (clientsRes || []).map(c => ({
+            ...c,
+            createdAt: c.createdAt ? new Date(c.createdAt) : undefined,
+            updatedAt: c.updatedAt ? new Date(c.updatedAt) : undefined
+        }));
+
+        providers = (providersRes || []).map(p => ({
+            ...p,
+            createdAt: p.createdAt ? new Date(p.createdAt) : undefined,
+            updatedAt: p.updatedAt ? new Date(p.updatedAt) : undefined
+        }));
+
+        appointments = (appointmentsRes || []).map(a => ({
+            ...a,
+            start: a.start ? new Date(a.start) : undefined,
+            end: a.end ? new Date(a.end) : undefined,
+            createdAt: a.createdAt ? new Date(a.createdAt) : undefined,
+            updatedAt: a.updatedAt ? new Date(a.updatedAt) : undefined
+        }));
+
+        renderClientList();
+        updateClientFilter();
+        updateAppointmentClientOptions();
+        renderProvidersList && renderProvidersList();
+        updateAppointmentProviderOptions();
+        renderCalendarEvents();
+        updateWeeklySummary();
+    } finally {
+        hideLoading();
+    }
+}
+
 // DOM elements
 const elements = {
     sidebar: document.getElementById('sidebar'),
@@ -277,26 +353,44 @@ async function saveProvider(providerData) {
         
         if (providerData.id) {
             // Update existing provider
-            const providerRef = doc(db, 'providers', providerData.id);
-            await updateDoc(providerRef, {
-                name: providerData.name,
-                email: providerData.email || '',
-                title: providerData.title || '',
-                color: providerData.color,
-                updatedAt: Timestamp.now()
-            });
+            if (useApiBackend) {
+                await apiPut(`/api/providers/${providerData.id}`, {
+                    name: providerData.name,
+                    email: providerData.email || '',
+                    title: providerData.title || '',
+                    color: providerData.color
+                });
+            } else {
+                const providerRef = doc(db, 'providers', providerData.id);
+                await updateDoc(providerRef, {
+                    name: providerData.name,
+                    email: providerData.email || '',
+                    title: providerData.title || '',
+                    color: providerData.color,
+                    updatedAt: Timestamp.now()
+                });
+            }
             showToast('Provider updated successfully');
         } else {
             // Add new provider
-            await addDoc(collection(db, 'providers'), {
-                name: providerData.name,
-                email: providerData.email || '',
-                title: providerData.title || '',
-                color: providerData.color,
-                ownerUid: auth.currentUser ? auth.currentUser.uid : null,
-                createdAt: Timestamp.now(),
-                updatedAt: Timestamp.now()
-            });
+            if (useApiBackend) {
+                await apiPost('/api/providers', {
+                    name: providerData.name,
+                    email: providerData.email || '',
+                    title: providerData.title || '',
+                    color: providerData.color
+                });
+            } else {
+                await addDoc(collection(db, 'providers'), {
+                    name: providerData.name,
+                    email: providerData.email || '',
+                    title: providerData.title || '',
+                    color: providerData.color,
+                    ownerUid: auth.currentUser ? auth.currentUser.uid : null,
+                    createdAt: Timestamp.now(),
+                    updatedAt: Timestamp.now()
+                });
+            }
             showToast('Provider added successfully');
         }
         
@@ -318,7 +412,7 @@ async function deleteProvider(providerId) {
             where('providerId', '==', providerId),
             where('ownerUid', '==', auth.currentUser ? auth.currentUser.uid : null)
         );
-        const appointmentDocs = await getDocs(appointmentsQuery);
+        const appointmentDocs = useApiBackend ? { docs: [] } : await getDocs(appointmentsQuery);
         
         const updatePromises = appointmentDocs.docs.map(doc => 
             updateDoc(doc.ref, { providerId: null })
@@ -326,7 +420,11 @@ async function deleteProvider(providerId) {
         await Promise.all(updatePromises);
         
         // Delete the provider
-        await deleteDoc(doc(db, 'providers', providerId));
+        if (useApiBackend) {
+            await apiDelete(`/api/providers/${providerId}`);
+        } else {
+            await deleteDoc(doc(db, 'providers', providerId));
+        }
         
         showToast('Provider deleted successfully');
         hideLoading();
@@ -449,9 +547,13 @@ async function saveClient(clientData) {
         if (clientData.id) {
             // Update existing client
             console.log('Updating existing client:', clientData.id);
-            const clientRef = doc(db, 'clients', clientData.id);
-            await updateDoc(clientRef, clientDoc);
-            console.log('Client updated successfully');
+            if (useApiBackend) {
+                await apiPut(`/api/clients/${clientData.id}`, clientDoc);
+            } else {
+                const clientRef = doc(db, 'clients', clientData.id);
+                await updateDoc(clientRef, clientDoc);
+                console.log('Client updated successfully');
+            }
             
             // Force calendar refresh after client update
             setTimeout(() => {
@@ -463,11 +565,15 @@ async function saveClient(clientData) {
             showToast('Client updated successfully');
         } else {
             // Add new client
-            console.log('Adding new client to Firestore');
+            console.log('Adding new client');
             clientDoc.createdAt = Timestamp.now();
             
-            const docRef = await addDoc(collection(db, 'clients'), clientDoc);
-            console.log('Client added with ID:', docRef.id);
+            if (useApiBackend) {
+                await apiPost('/api/clients', clientDoc);
+            } else {
+                const docRef = await addDoc(collection(db, 'clients'), clientDoc);
+                console.log('Client added with ID:', docRef.id);
+            }
             
             // Don't update local state here - let Firebase listener handle it
             // This prevents duplicates since the listener will pick up the new document
@@ -482,6 +588,9 @@ async function saveClient(clientData) {
             showToast('Client added successfully');
         }
         
+        if (useApiBackend) {
+            await loadDataFromApi();
+        }
         hideLoading();
     } catch (error) {
         console.error('Error saving client:', error);
@@ -513,23 +622,29 @@ async function deleteClient(clientId) {
         console.log('Deleting client:', clientId);
         
         // First, delete all appointments for this client
-        const appointmentsQuery = query(
-            collection(db, 'appointments'),
-            where('clientId', '==', clientId),
-            where('ownerUid', '==', auth.currentUser ? auth.currentUser.uid : null)
-        );
-        const appointmentDocs = await getDocs(appointmentsQuery);
-        
-        console.log('Found', appointmentDocs.docs.length, 'appointments to delete');
-        const deletePromises = appointmentDocs.docs.map(doc => deleteDoc(doc.ref));
-        await Promise.all(deletePromises);
+        if (!useApiBackend) {
+            const appointmentsQuery = query(
+                collection(db, 'appointments'),
+                where('clientId', '==', clientId),
+                where('ownerUid', '==', auth.currentUser ? auth.currentUser.uid : null)
+            );
+            const appointmentDocs = await getDocs(appointmentsQuery);
+            console.log('Found', appointmentDocs.docs.length, 'appointments to delete');
+            const deletePromises = appointmentDocs.docs.map(doc => deleteDoc(doc.ref));
+            await Promise.all(deletePromises);
+        }
         
         // Then delete the client
-        await deleteDoc(doc(db, 'clients', clientId));
+        if (useApiBackend) {
+            await apiDelete(`/api/clients/${clientId}`);
+        } else {
+            await deleteDoc(doc(db, 'clients', clientId));
+        }
         console.log('Client deleted successfully:', clientId);
         
-        // Don't update local state here - let Firebase listener handle it
-        // The real-time listener will automatically remove the deleted client
+        if (useApiBackend) {
+            await loadDataFromApi();
+        }
         
         showToast('Client and all associated appointments deleted');
         hideLoading();
@@ -619,7 +734,22 @@ async function saveAppointment(appointmentData) {
         if (appointmentData.id) {
             // Update existing appointment
             console.log('Updating existing appointment:', appointmentData.id);
-            const appointmentRef = doc(db, 'appointments', appointmentData.id);
+            if (useApiBackend) {
+                await apiPut(`/api/appointments/${appointmentData.id}`, {
+                    clientId: appointmentData.clientId,
+                    providerId: appointmentData.providerId || null,
+                    start: startTimestamp.toDate(),
+                    end: endTimestamp.toDate(),
+                    duration: appointmentData.duration || 50,
+                    priority: appointmentData.priority || 'normal',
+                    status: appointmentData.status || 'scheduled',
+                    notes: (appointmentData.notes || '').trim(),
+                    repeats: appointmentData.repeats || 'none'
+                });
+                showToast('Appointment updated successfully');
+                await loadDataFromApi();
+            } else {
+                const appointmentRef = doc(db, 'appointments', appointmentData.id);
             
             // Check if we're changing from non-recurring to recurring
             const originalAppointment = appointments.find(apt => apt.id === appointmentData.id);
@@ -646,15 +776,31 @@ async function saveAppointment(appointmentData) {
             console.log('Adding new appointment to Firestore');
             appointmentDoc.createdAt = Timestamp.now();
             
-            if (appointmentDoc.repeats && appointmentDoc.repeats !== 'none') {
-                // Create recurring appointments
-                await createRecurringAppointments(appointmentDoc);
-                showToast('Recurring appointments created successfully');
-            } else {
-                // Single appointment
-                const docRef = await addDoc(collection(db, 'appointments'), appointmentDoc);
-                console.log('Appointment added with ID:', docRef.id);
+            if (useApiBackend) {
+                // API backend - create single appointment (recurrence not implemented in API yet)
+                await apiPost('/api/appointments', {
+                    clientId: appointmentData.clientId,
+                    providerId: appointmentData.providerId || null,
+                    start: startTimestamp.toDate(),
+                    end: endTimestamp.toDate(),
+                    duration: appointmentData.duration || 50,
+                    priority: appointmentData.priority || 'normal',
+                    status: appointmentData.status || 'scheduled',
+                    notes: (appointmentData.notes || '').trim(),
+                    repeats: appointmentData.repeats || 'none'
+                });
                 showToast('Appointment created successfully');
+            } else {
+                if (appointmentDoc.repeats && appointmentDoc.repeats !== 'none') {
+                    // Create recurring appointments
+                    await createRecurringAppointments(appointmentDoc);
+                    showToast('Recurring appointments created successfully');
+                } else {
+                    // Single appointment
+                    const docRef = await addDoc(collection(db, 'appointments'), appointmentDoc);
+                    console.log('Appointment added with ID:', docRef.id);
+                    showToast('Appointment created successfully');
+                }
             }
         }
         
@@ -883,11 +1029,18 @@ async function deleteAppointment(appointmentId) {
             throw new Error('Appointment ID is required');
         }
         
-        console.log('Deleting appointment from Firebase...');
-        await deleteDoc(doc(db, 'appointments', appointmentId));
-        console.log('Appointment deleted from Firebase successfully');
+        if (useApiBackend) {
+            await apiDelete(`/api/appointments/${appointmentId}`);
+        } else {
+            console.log('Deleting appointment from Firebase...');
+            await deleteDoc(doc(db, 'appointments', appointmentId));
+            console.log('Appointment deleted from Firebase successfully');
+        }
         
         showToast('Appointment deleted successfully');
+        if (useApiBackend) {
+            await loadDataFromApi();
+        }
         hideLoading();
         console.log('Delete process completed successfully');
     } catch (error) {
@@ -918,115 +1071,121 @@ function setupDataListeners() {
     console.log('Database instance check:', db);
     
     try {
-        // Listen for client changes (scoped to current user)
-        const clientsQuery = query(
-            collection(db, 'clients'),
-            where('ownerUid', '==', auth.currentUser ? auth.currentUser.uid : null),
-            orderBy('name')
-        );
-        onSnapshot(clientsQuery, 
-            (snapshot) => {
-                console.log('Clients snapshot received:', snapshot.size, 'documents');
-                clients = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data(),
-                    createdAt: doc.data().createdAt?.toDate(),
-                    updatedAt: doc.data().updatedAt?.toDate()
-                }));
-                console.log('Clients loaded:', clients.length);
-                renderClientList();
-                updateClientFilter();
-                updateAppointmentClientOptions();
-            },
-            (error) => {
-                console.error('Error listening to clients:', error);
-                showToast('Error loading clients: ' + error.message, 'error');
-            }
-        );
-        
-        // Listen for provider changes (scoped to current user)
-        const providersQuery = query(
-            collection(db, 'providers'),
-            where('ownerUid', '==', auth.currentUser ? auth.currentUser.uid : null),
-            orderBy('name')
-        );
-        onSnapshot(providersQuery, 
-            (snapshot) => {
-                console.log('Providers snapshot received:', snapshot.size, 'documents');
-                providers = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data(),
-                    createdAt: doc.data().createdAt?.toDate(),
-                    updatedAt: doc.data().updatedAt?.toDate()
-                }));
-                console.log('Providers loaded:', providers.length);
-                renderProvidersList();
-                updateAppointmentProviderOptions();
-            },
-            (error) => {
-                console.error('Error listening to providers:', error);
-                showToast('Error loading providers: ' + error.message, 'error');
-            }
-        );
-        
-        // Listen for appointment changes (scoped to current user)
-        const appointmentsQuery = query(
-            collection(db, 'appointments'),
-            where('ownerUid', '==', auth.currentUser ? auth.currentUser.uid : null),
-            orderBy('start')
-        );
-        onSnapshot(appointmentsQuery, 
-            (snapshot) => {
-                console.log('Appointments snapshot received:', snapshot.size, 'documents');
-                appointments = snapshot.docs.map(doc => {
-                    const data = doc.data();
-                    const appointment = {
+        if (!useApiBackend) {
+            // Listen for client changes (scoped to current user)
+            const clientsQuery = query(
+                collection(db, 'clients'),
+                where('ownerUid', '==', auth.currentUser ? auth.currentUser.uid : null),
+                orderBy('name')
+            );
+            onSnapshot(clientsQuery, 
+                (snapshot) => {
+                    console.log('Clients snapshot received:', snapshot.size, 'documents');
+                    clients = snapshot.docs.map(doc => ({
                         id: doc.id,
-                        ...data,
-                        start: data.start?.toDate(),
-                        end: data.end?.toDate(),
-                        createdAt: data.createdAt?.toDate(),
-                        updatedAt: data.updatedAt?.toDate()
-                    };
-                    
-                    // Log any suspicious appointments for debugging
-                    if (!appointment.start || !appointment.end || !appointment.clientId) {
-                        console.warn('Found malformed appointment:', appointment);
-                    } else if (appointment.end <= appointment.start) {
-                        console.warn('Found appointment with invalid duration:', appointment);
-                    }
-                    
-                    return appointment;
-                });
-                console.log('Appointments loaded:', appointments.length);
-                
-                // Log all appointments and check for overlaps
-                appointments.forEach((apt, index) => {
-                    if (apt.start && apt.end) {
-                        const duration = (apt.end - apt.start) / 60000;
-                        console.log(`Appointment ${index + 1}: ${apt.start.toLocaleString()} - ${apt.end.toLocaleString()} (${duration} minutes)`);
-                    }
-                });
-                
-                // Check for overlapping appointments and warn
-                const overlaps = findOverlappingAppointments();
-                if (overlaps.length > 0) {
-                    console.warn('Found overlapping appointments:', overlaps);
-                    overlaps.forEach(overlap => {
-                        const client1 = clients.find(c => c.id === overlap.apt1.clientId)?.name || 'Unknown';
-                        const client2 = clients.find(c => c.id === overlap.apt2.clientId)?.name || 'Unknown';
-                        console.warn(`Overlap: ${client1} (${overlap.apt1.start.toLocaleTimeString()}) conflicts with ${client2} (${overlap.apt2.start.toLocaleTimeString()})`);
-                    });
+                        ...doc.data(),
+                        createdAt: doc.data().createdAt?.toDate(),
+                        updatedAt: doc.data().updatedAt?.toDate()
+                    }));
+                    console.log('Clients loaded:', clients.length);
+                    renderClientList();
+                    updateClientFilter();
+                    updateAppointmentClientOptions();
+                },
+                (error) => {
+                    console.error('Error listening to clients:', error);
+                    showToast('Error loading clients: ' + error.message, 'error');
                 }
-                
-                renderCalendarEvents();
-                updateWeeklySummary();
-            },
-            (error) => {
-                console.error('Error listening to appointments:', error);
-                showToast('Error loading appointments: ' + error.message, 'error');
-            }
-        );
+            );
+        }
+        
+        if (!useApiBackend) {
+            // Listen for provider changes (scoped to current user)
+            const providersQuery = query(
+                collection(db, 'providers'),
+                where('ownerUid', '==', auth.currentUser ? auth.currentUser.uid : null),
+                orderBy('name')
+            );
+            onSnapshot(providersQuery, 
+                (snapshot) => {
+                    console.log('Providers snapshot received:', snapshot.size, 'documents');
+                    providers = snapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data(),
+                        createdAt: doc.data().createdAt?.toDate(),
+                        updatedAt: doc.data().updatedAt?.toDate()
+                    }));
+                    console.log('Providers loaded:', providers.length);
+                    renderProvidersList();
+                    updateAppointmentProviderOptions();
+                },
+                (error) => {
+                    console.error('Error listening to providers:', error);
+                    showToast('Error loading providers: ' + error.message, 'error');
+                }
+            );
+        }
+        
+        if (!useApiBackend) {
+            // Listen for appointment changes (scoped to current user)
+            const appointmentsQuery = query(
+                collection(db, 'appointments'),
+                where('ownerUid', '==', auth.currentUser ? auth.currentUser.uid : null),
+                orderBy('start')
+            );
+            onSnapshot(appointmentsQuery, 
+                (snapshot) => {
+                    console.log('Appointments snapshot received:', snapshot.size, 'documents');
+                    appointments = snapshot.docs.map(doc => {
+                        const data = doc.data();
+                        const appointment = {
+                            id: doc.id,
+                            ...data,
+                            start: data.start?.toDate(),
+                            end: data.end?.toDate(),
+                            createdAt: data.createdAt?.toDate(),
+                            updatedAt: data.updatedAt?.toDate()
+                        };
+                        
+                        // Log any suspicious appointments for debugging
+                        if (!appointment.start || !appointment.end || !appointment.clientId) {
+                            console.warn('Found malformed appointment:', appointment);
+                        } else if (appointment.end <= appointment.start) {
+                            console.warn('Found appointment with invalid duration:', appointment);
+                        }
+                        
+                        return appointment;
+                    });
+                    console.log('Appointments loaded:', appointments.length);
+                    
+                    // Log all appointments and check for overlaps
+                    appointments.forEach((apt, index) => {
+                        if (apt.start && apt.end) {
+                            const duration = (apt.end - apt.start) / 60000;
+                            console.log(`Appointment ${index + 1}: ${apt.start.toLocaleString()} - ${apt.end.toLocaleString()} (${duration} minutes)`);
+                        }
+                    });
+                    
+                    // Check for overlapping appointments and warn
+                    const overlaps = findOverlappingAppointments();
+                    if (overlaps.length > 0) {
+                        console.warn('Found overlapping appointments:', overlaps);
+                        overlaps.forEach(overlap => {
+                            const client1 = clients.find(c => c.id === overlap.apt1.clientId)?.name || 'Unknown';
+                            const client2 = clients.find(c => c.id === overlap.apt2.clientId)?.name || 'Unknown';
+                            console.warn(`Overlap: ${client1} (${overlap.apt1.start.toLocaleTimeString()}) conflicts with ${client2} (${overlap.apt2.start.toLocaleTimeString()})`);
+                        });
+                    }
+                    
+                    renderCalendarEvents();
+                    updateWeeklySummary();
+                },
+                (error) => {
+                    console.error('Error listening to appointments:', error);
+                    showToast('Error loading appointments: ' + error.message, 'error');
+                }
+            );
+        }
         
         console.log('Firebase listeners setup complete');
     } catch (error) {
@@ -2667,12 +2826,16 @@ async function initializeApp() {
         // Setup event listeners
         setupEventListeners();
         
-        // Wait for auth before attaching Firestore listeners
-        onAuthStateChanged(auth, (user) => {
+        // Wait for auth; use API backend if configured, else Firestore listeners
+        onAuthStateChanged(auth, async (user) => {
             currentUser = user;
             if (user && !dataListenersInitialized) {
                 dataListenersInitialized = true;
-                setupDataListeners();
+                if (useApiBackend) {
+                    await loadDataFromApi();
+                } else {
+                    setupDataListeners();
+                }
             }
         });
         

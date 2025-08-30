@@ -7,12 +7,15 @@ services:
       echo "window.OPENAI_API_KEY='${OPENAI_API_KEY}';" > env.js
       if [ ! -z "${ELEVENLABS_API_KEY}" ]; then echo "window.ELEVENLABS_API_KEY='${ELEVENLABS_API_KEY}';" >> env.js; fi
       if [ ! -z "${FIREBASE_CONFIG}" ]; then echo "window.FIREBASE_CONFIG='${FIREBASE_CONFIG}';" >> env.js; fi
+      if [ ! -z "${API_BASE_URL}" ]; then echo "window.API_BASE_URL='${API_BASE_URL}';" >> env.js; fi
     envVars:
       - key: OPENAI_API_KEY
         sync: false
       - key: ELEVENLABS_API_KEY
         sync: false
       - key: FIREBASE_CONFIG
+        sync: false
+      - key: API_BASE_URL
         sync: false
     routes:
       - type: rewrite
@@ -21,3 +24,17 @@ services:
       - type: rewrite
         source: /
         destination: /index.html
+
+  - type: web
+    name: calmconnect-api
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
+      - key: CORS_ORIGIN
+        value: https://therapycal.onrender.com
