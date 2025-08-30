@@ -5,8 +5,14 @@ services:
     staticPublishPath: .
     buildCommand: |
       echo "window.OPENAI_API_KEY='${OPENAI_API_KEY}';" > env.js
+      if [ ! -z "${ELEVENLABS_API_KEY}" ]; then echo "window.ELEVENLABS_API_KEY='${ELEVENLABS_API_KEY}';" >> env.js; fi
+      if [ ! -z "${FIREBASE_CONFIG}" ]; then echo "window.FIREBASE_CONFIG='${FIREBASE_CONFIG}';" >> env.js; fi
     envVars:
       - key: OPENAI_API_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: FIREBASE_CONFIG
         sync: false
     routes:
       - type: rewrite
