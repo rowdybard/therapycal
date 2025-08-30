@@ -1677,7 +1677,7 @@ function initializeCalendar() {
         eventConstraint: 'businessHours', // Constrain events to business hours
         dragRevertDuration: 200,    // Animation duration when drag is reverted
         eventDragMinDistance: 5,    // Minimum pixels to start drag
-        eventDragOpacity: 0.75,     // Opacity during drag
+        // eventDragOpacity removed (unsupported option in current FullCalendar build)
         eventResizableFromStart: false, // Disable resizing from start
         dragScroll: true,           // Enable auto-scroll during drag
         // Time format settings
