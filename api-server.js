@@ -136,6 +136,7 @@ app.post('/api/transcribe', authenticate, async (req, res) => {
   try {
     if (!OPENAI_API_KEY) return res.status(500).json({ error: 'OPENAI_API_KEY missing' });
     const contentType = req.headers['content-type'] || 'application/octet-stream';
+    console.log('[/api/transcribe] content-type:', contentType);
     const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
@@ -146,11 +147,13 @@ app.post('/api/transcribe', authenticate, async (req, res) => {
     });
     if (!resp.ok) {
       const text = await resp.text();
+      console.error('[/api/transcribe] OpenAI error', resp.status, text);
       return res.status(resp.status).json({ error: 'OpenAI error', details: text });
     }
     const data = await resp.json();
     res.json(data);
   } catch (e) {
+    console.error('[/api/transcribe] Failed:', e);
     res.status(500).json({ error: 'Transcription proxy failed', details: e.message });
   }
 });

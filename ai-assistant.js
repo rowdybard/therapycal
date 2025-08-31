@@ -63,7 +63,16 @@ function initializeOpenAI() {
                         });
                         
                         if (!response.ok) {
-                            throw new Error(`OpenAI Audio API error: ${response.status} ${response.statusText}`);
+                            let details = '';
+                            try {
+                                const err = await response.json();
+                                details = err && (err.details || err.error || JSON.stringify(err));
+                            } catch (_) {
+                                try {
+                                    details = await response.text();
+                                } catch (_) {}
+                            }
+                            throw new Error(`OpenAI Audio API error: ${response.status} ${response.statusText} ${details || ''}`.trim());
                         }
                         
                         return await response.json();
