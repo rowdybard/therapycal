@@ -1488,55 +1488,53 @@
     </aside>
 
     <main class="flex-1 flex flex-col h-screen min-h-0">
-        <header class="bg-white p-2 border-b border-gray-200 flex flex-col md:flex-row md:items-center md:justify-between space-y-2 md:space-y-0 flex-shrink-0">
-            <div class="flex items-center justify-between w-full">
-                <div class="flex items-center space-x-2">
-                    <button id="menu-toggle-btn" class="md:hidden p-2 text-gray-600">
-                        <span class="material-icons">menu</span>
-                    </button>
-                    <h2 id="calendar-title" class="text-lg font-semibold text-gray-800"></h2>
-                </div>
-                <div class="flex items-center space-x-2">
-                    <!-- Dark Mode Toggle -->
-                    <button id="dark-mode-btn" class="px-3 py-1.5 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors duration-200" title="Toggle Dark Mode">
-                        <span class="material-icons text-base">dark_mode</span>
-                    </button>
-                    
-                    <!-- Privacy Toggle -->
-                    <button id="privacy-btn" class="px-3 py-1.5 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors duration-200" title="Toggle Privacy Mode">
-                        <span class="material-icons text-base">visibility</span>
-                    </button>
-                    
-                    <button id="today-btn" class="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300">Today</button>
-                    <button id="voice-assistant-btn" class="relative px-3 py-1.5 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors duration-200" title="AI Voice Assistant">
-                        <span id="voice-icon" class="material-icons text-base">mic</span>
-                        <div id="voice-status" class="absolute -top-1 -right-1 w-3 h-3 rounded-full hidden"></div>
-                        <div class="ai-indicator"></div>
-                    </button>
-
-                    <button id="prev-btn" class="p-1.5 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300"><span class="material-icons">chevron_left</span></button>
-                    <button id="next-btn" class="p-1.5 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300"><span class="material-icons">chevron_right</span></button>
-                </div>
+        <header class="bg-white p-2 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+            <div class="flex items-center space-x-2">
+                <button id="menu-toggle-btn" class="md:hidden p-2 text-gray-600">
+                    <span class="material-icons">menu</span>
+                </button>
             </div>
-            <div class="flex items-center justify-between w-full">
-                <div class="flex items-center space-x-1" id="view-switcher">
-                    <button class="view-btn hidden md:inline-block px-3 py-1.5 ml-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300" data-view="dayGridMonth">Month</button>
-                    <button class="view-btn px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300" data-view="timeGridWeek">Week</button>
-                    <button class="view-btn px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300" data-view="timeGridDay">Day</button>
-                    <button class="view-btn hidden md:inline-block px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300" data-view="listWeek">List</button>
-                </div>
-                <div class="flex items-center space-x-2">
-                    <button id="new-appointment-btn" class="flex items-center space-x-1 bg-indigo-600 text-white px-3 py-1.5 rounded-md hover:bg-indigo-700 transition-colors">
-                        <span class="material-icons text-base">add</span>
-                        <span class="text-sm font-medium">New Appointment</span>
-                    </button>
+            <div class="flex items-center space-x-2">
+                <!-- Dark Mode Toggle -->
+                <button id="dark-mode-btn" class="px-3 py-1.5 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors duration-200" title="Toggle Dark Mode">
+                    <span class="material-icons text-base">dark_mode</span>
+                </button>
+                
+                <!-- Privacy Toggle -->
+                <button id="privacy-btn" class="px-3 py-1.5 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors duration-200" title="Toggle Privacy Mode">
+                    <span class="material-icons text-base">visibility</span>
+                </button>
+                
+                <button id="voice-assistant-btn" class="relative px-3 py-1.5 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors duration-200" title="AI Voice Assistant">
+                    <span id="voice-icon" class="material-icons text-base">mic</span>
+                    <div id="voice-status" class="absolute -top-1 -right-1 w-3 h-3 rounded-full hidden"></div>
+                    <div class="ai-indicator"></div>
+                </button>
 
-                </div>
+                <button id="new-appointment-btn" class="flex items-center space-x-1 bg-indigo-600 text-white px-3 py-1.5 rounded-md hover:bg-indigo-700 transition-colors">
+                    <span class="material-icons text-base">add</span>
+                    <span class="text-sm font-medium">New Appointment</span>
+                </button>
             </div>
         </header>
 
         <div class="flex-grow p-2 md:p-3 min-h-0">
-            <div id='calendar' class="bg-white rounded-lg shadow-sm" style="height: 820px;"></div>
+            <!-- Calendar Navigation Bar -->
+            <div class="bg-white p-2 mb-2 border border-gray-200 rounded-lg flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <button id="prev-btn" class="p-1.5 text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200"><span class="material-icons">chevron_left</span></button>
+                    <h2 id="calendar-title" class="text-lg font-semibold text-gray-800 px-2"></h2>
+                    <button id="next-btn" class="p-1.5 text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200"><span class="material-icons">chevron_right</span></button>
+                    <button id="today-btn" class="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 ml-2">Today</button>
+                </div>
+                <div class="flex items-center space-x-1" id="view-switcher">
+                    <button class="view-btn hidden md:inline-block px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200" data-view="dayGridMonth">Month</button>
+                    <button class="view-btn px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200" data-view="timeGridWeek">Week</button>
+                    <button class="view-btn px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200" data-view="timeGridDay">Day</button>
+                    <button class="view-btn hidden md:inline-block px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200" data-view="listWeek">List</button>
+                </div>
+            </div>
+            <div id='calendar' class="bg-white rounded-lg shadow-sm" style="height: 870px;"></div>
         </div>
     </main>
     
@@ -2150,7 +2148,7 @@
     <script type="module" src="firebase-config.js?v=2"></script>
     <script type="module" src="tts-service.js?v=5"></script>
     <script type="module" src="ai-assistant.js?v=6"></script>
-    <script type="module" src="app.js?v=13"></script>
+    <script type="module" src="app.js?v=14"></script>
     
     <!-- Authentication Script -->
     <script type="module">
