@@ -1075,17 +1075,17 @@ async function setupDataListeners() {
     console.log('Setting up Firebase data listeners...');
     console.log('Database instance check:', db);
     
+    // Get team UIDs to include in data queries (declare at function scope)
+    let teamOwnerUids = [auth.currentUser.uid];
+    
     try {
         if (!useApiBackend) {
-            // Get team UIDs to include in data queries
-            const teamOwnerUids = [auth.currentUser.uid];
-            
-            // Get teams where current user is a member
-            const memberTeamsQuery = query(
-                collection(db, 'teams'),
-                where('memberId', '==', auth.currentUser.uid)
-            );
+            // Get teams where current user is a member (skip team loading for now to avoid permissions issues)
             try {
+                const memberTeamsQuery = query(
+                    collection(db, 'teams'),
+                    where('memberId', '==', auth.currentUser.uid)
+                );
                 const memberTeamsSnapshot = await getDocs(memberTeamsQuery);
                 memberTeamsSnapshot.docs.forEach(doc => {
                     const data = doc.data();
@@ -1095,7 +1095,9 @@ async function setupDataListeners() {
                 });
                 console.log('Loading data for team owners:', teamOwnerUids);
             } catch (error) {
-                console.warn('Could not load team data:', error);
+                console.warn('Could not load team data (using individual user data only):', error);
+                // Continue with just current user
+                teamOwnerUids = [auth.currentUser.uid];
             }
             
             // Listen for client changes (scoped to current user and team owners)
@@ -3130,21 +3132,29 @@ async function loadTeamMembers() {
     if (!auth.currentUser) return;
     
     try {
-        // Load team relationships
-        const teamsQuery = query(
-            collection(db, 'teams'),
-            where('ownerId', '==', auth.currentUser.uid)
-        );
+        // Load team relationships (with error handling for missing permissions)
+        let ownedTeams = { docs: [] };
+        let memberTeams = { docs: [] };
         
-        const memberQuery = query(
-            collection(db, 'teams'),
-            where('memberId', '==', auth.currentUser.uid)
-        );
+        try {
+            const teamsQuery = query(
+                collection(db, 'teams'),
+                where('ownerId', '==', auth.currentUser.uid)
+            );
+            ownedTeams = await getDocs(teamsQuery);
+        } catch (error) {
+            console.warn('Could not load owned teams:', error);
+        }
         
-        const [ownedTeams, memberTeams] = await Promise.all([
-            getDocs(teamsQuery),
-            getDocs(memberQuery)
-        ]);
+        try {
+            const memberQuery = query(
+                collection(db, 'teams'),
+                where('memberId', '==', auth.currentUser.uid)
+            );
+            memberTeams = await getDocs(memberQuery);
+        } catch (error) {
+            console.warn('Could not load member teams:', error);
+        }
         
         teamMembers = [];
         
@@ -3258,7 +3268,15 @@ async function generateInviteLink() {
         
     } catch (error) {
         console.error('Error generating invite link:', error);
-        showToast('Failed to generate invite link', 'error');
+        if (error.code === 'permission-denied') {
+            showToast('Team features require updated Firestore rules. Using individual mode.', 'warning');
+            const inviteLinkInput = document.getElementById('invite-link');
+            if (inviteLinkInput) {
+                inviteLinkInput.value = 'Team features require Firestore security rules setup';
+            }
+        } else {
+            showToast('Failed to generate invite link', 'error');
+        }
     }
 }
 
