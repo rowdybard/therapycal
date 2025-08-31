@@ -3404,11 +3404,6 @@ function initializeVoiceAssistant() {
 }
 
 function toggleVoiceRecording() {
-    if (!window.OPENAI_API_KEY) {
-        showToast('OpenAI API key required for voice features', 'error');
-        return;
-    }
-    
     // Show voice modal first if not already visible
     const modal = document.getElementById('voice-assistant-modal');
     if (modal && modal.classList.contains('hidden')) {

@@ -49,12 +49,4 @@ const db = getFirestore(app);
 // Initialize Firebase Auth
 const auth = getAuth(app);
 
-// Export for use in other modules
-// Set up OpenAI API key for browser environment
-if (typeof window !== 'undefined') {
-    // Configure OpenAI API key from environment variables
-    window.OPENAI_API_KEY = window.OPENAI_API_KEY || 
-                            (typeof process !== 'undefined' && process.env ? process.env.OPENAI_API_KEY : null);
-}
-
 export { db, auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup };

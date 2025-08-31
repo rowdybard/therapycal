@@ -1,6 +1,8 @@
 // Text-to-Speech Service using ElevenLabs API
 // Provides natural voice responses for the therapy calendar assistant
 
+import { auth } from './firebase-config.js';
+
 class TTSService {
     constructor() {
         this.apiKey = null;
@@ -70,10 +72,13 @@ class TTSService {
             let audioBlob;
             if (typeof window !== 'undefined') {
                 // Use same-origin server proxy (preferred)
+                const user = auth?.currentUser;
+                const token = user ? await user.getIdToken() : null;
                 const resp = await fetch(`/api/tts`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                     },
                     body: JSON.stringify({
                         text: text,
