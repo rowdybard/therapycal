@@ -1811,7 +1811,7 @@ function initializeCalendar() {
             weekday: 'short'  // Mon, Tue, Wed, etc.
         },
         height: '100%',
-        contentHeight: 'auto',
+        contentHeight: '100%',
         expandRows: true,
         editable: true,
         selectable: true,
