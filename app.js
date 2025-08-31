@@ -1796,6 +1796,18 @@ function initializeCalendar() {
     // Set mobile-friendly initial view
     const isMobile = window.innerWidth < 768;
     const initialView = isMobile ? 'timeGridWeek' : 'dayGridMonth';
+
+    // Compute available viewport height for calendar (no vertical scroll)
+    function getCalendarHeight() {
+        const headerEl = document.querySelector('main > header');
+        const mainEl = document.querySelector('main');
+        const headerH = headerEl ? headerEl.offsetHeight : 0;
+        const styles = mainEl ? getComputedStyle(mainEl) : null;
+        const padTop = styles ? parseInt(styles.paddingTop || '0', 10) : 0;
+        const padBottom = styles ? parseInt(styles.paddingBottom || '0', 10) : 0;
+        const available = window.innerHeight - headerH - padTop - padBottom - 8; // small safety
+        return Math.max(540, available);
+    }
     
     calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: initialView,
@@ -1810,18 +1822,19 @@ function initializeCalendar() {
         dayHeaderFormat: {
             weekday: 'short'  // Mon, Tue, Wed, etc.
         },
-        height: 'auto',
-        contentHeight: 'auto',
-        expandRows: false,
+        height: getCalendarHeight(),
+        expandRows: true,
         editable: true,
         selectable: true,
         selectMirror: true,
         selectOverlap: false, // Prevent selecting over existing events
         selectConstraint: 'businessHours', // Only allow selection during business hours
         dayMaxEvents: true,
-        height: 'parent',
         weekends: true,
         nowIndicator: true,
+        windowResize: function() {
+            calendar.setOption('height', getCalendarHeight());
+        },
         now: function() {
             // Use Eastern Daylight Time (EDT) timezone
             const now = new Date();
