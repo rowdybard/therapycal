@@ -1810,7 +1810,7 @@ function initializeCalendar() {
         dayHeaderFormat: {
             weekday: 'short'  // Mon, Tue, Wed, etc.
         },
-        height: 'auto',
+        height: '100%',
         contentHeight: 'auto',
         expandRows: true,
         editable: true,
@@ -2320,6 +2320,152 @@ function initializeCalendar() {
     
     // Add swipe navigation for touch devices
     setupSwipeNavigation();
+}
+
+// Persistent AI Notes Chat (simple client-side history, server-side auth)
+function initializeAiNotesChat() {
+    const form = document.getElementById('ai-chat-form');
+    const input = document.getElementById('ai-chat-input');
+    const log = document.getElementById('ai-chat-log');
+    const micBtn = document.getElementById('ai-chat-mic');
+    if (!form || !input || !log) return;
+
+    let convo = [];
+
+    function appendMessage(role, content) {
+        const wrapper = document.createElement('div');
+        wrapper.className = role === 'user' ? 'text-right' : 'text-left';
+        const bubble = document.createElement('div');
+        bubble.className = role === 'user' ? 'inline-block bg-indigo-600 text-white px-3 py-2 rounded-lg' : 'inline-block bg-gray-100 text-gray-800 px-3 py-2 rounded-lg';
+        bubble.textContent = content;
+        wrapper.appendChild(bubble);
+        log.appendChild(wrapper);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const text = (input.value || '').trim();
+        if (!text) return;
+        appendMessage('user', text);
+        input.value = '';
+
+        // Build messages with short context from convo
+        const recent = convo.slice(-8);
+        const messages = [
+            { role: 'system', content: 'You are a helpful notes assistant for a therapy practice. Keep answers concise. You can reference appointments, clients, and providers the user has in the app, but if you lack details, ask a short clarifying question.' },
+            ...recent,
+            { role: 'user', content: text }
+        ];
+
+        try {
+            // Use backend chat proxy with Firebase auth
+            const user = auth?.currentUser;
+            if (!user) throw new Error('Not authenticated');
+            const token = await user.getIdToken();
+            const resp = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ model: 'gpt-4o', messages, temperature: 0.7, max_tokens: 500 })
+            });
+            if (!resp.ok) {
+                const txt = await resp.text();
+                throw new Error(txt || `HTTP ${resp.status}`);
+            }
+            const data = await resp.json();
+            const reply = data.choices?.[0]?.message?.content || '...';
+            appendMessage('assistant', reply);
+            convo = [...recent, { role: 'user', content: text }, { role: 'assistant', content: reply }];
+        } catch (err) {
+            appendMessage('assistant', 'Sorry, I had trouble responding just now.');
+            console.error('AI notes chat error:', err);
+        }
+    });
+
+    // One-tap mic with auto-stop on silence
+    if (micBtn && navigator.mediaDevices && window.MediaRecorder) {
+        let recorder = null;
+        let chunks = [];
+        let isRecording = false;
+        let audioCtx = null, analyser = null, source = null, vadTimer = null, lastVoiceTs = 0;
+        const SILENCE_MS = 1200, VAD_INTERVAL_MS = 100, AMP_THRESHOLD = 0.035;
+
+        function setMicActive(active) {
+            micBtn.classList.toggle('bg-red-600', active);
+            micBtn.classList.toggle('text-white', active);
+            micBtn.classList.toggle('bg-gray-100', !active);
+            micBtn.classList.toggle('text-gray-800', !active);
+        }
+
+        function teardownAudio() {
+            if (vadTimer) { clearTimeout(vadTimer); vadTimer = null; }
+            try { source && source.disconnect(); } catch (_) {}
+            try { analyser && analyser.disconnect(); } catch (_) {}
+            try { audioCtx && audioCtx.close(); } catch (_) {}
+            source = analyser = audioCtx = null;
+        }
+
+        function startVAD(stream) {
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                source = audioCtx.createMediaStreamSource(stream);
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 1024;
+                source.connect(analyser);
+                const data = new Uint8Array(analyser.fftSize);
+                lastVoiceTs = Date.now();
+                const sample = () => {
+                    analyser.getByteTimeDomainData(data);
+                    let sum = 0; for (let i = 0; i < data.length; i++) { const v = (data[i] - 128) / 128; sum += v * v; }
+                    const rms = Math.sqrt(sum / data.length);
+                    if (rms > AMP_THRESHOLD) lastVoiceTs = Date.now();
+                    if (isRecording && Date.now() - lastVoiceTs > SILENCE_MS) { try { recorder && recorder.stop(); } catch(_){} return; }
+                    vadTimer = setTimeout(sample, VAD_INTERVAL_MS);
+                };
+                sample();
+            } catch (e) { console.warn('VAD init failed:', e); }
+        }
+
+        micBtn.addEventListener('click', async () => {
+            try {
+                if (!isRecording) {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                    chunks = [];
+                    recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+                    recorder.onstop = async () => {
+                        try {
+                            teardownAudio();
+                            try { stream.getTracks().forEach(t => t.stop()); } catch(_){}
+                            const blob = new Blob(chunks, { type: 'audio/webm' });
+                            const file = new File([blob], `note_${Date.now()}.webm`, { type: 'audio/webm' });
+                            const user = auth?.currentUser; if (!user) throw new Error('Not authenticated');
+                            const token = await user.getIdToken();
+                            const formData = new FormData();
+                            formData.append('file', file);
+                            formData.append('model', 'whisper-1');
+                            formData.append('response_format', 'verbose_json');
+                            const resp = await fetch('/api/transcribe', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
+                            if (!resp.ok) { const t = await resp.text(); throw new Error(t || `HTTP ${resp.status}`); }
+                            let transcriptText = '';
+                            const ct = resp.headers.get('content-type') || '';
+                            if (ct.includes('application/json')) { const d = await resp.json(); transcriptText = (d && (d.text || d.transcription || '')) || ''; }
+                            else { transcriptText = (await resp.text()) || ''; }
+                            if (transcriptText) { input.value = transcriptText.trim(); form.dispatchEvent(new Event('submit')); }
+                        } catch (err) {
+                            console.error('Mic transcribe error:', err); showToast('Could not transcribe note', 'error');
+                        } finally { setMicActive(false); isRecording = false; }
+                    };
+                    recorder.start(); isRecording = true; setMicActive(true); startVAD(stream);
+                } else { try { recorder.stop(); } catch(_){} }
+            } catch (err) {
+                console.error('Mic error:', err); showToast('Microphone unavailable', 'error'); setMicActive(false); isRecording = false;
+            }
+        });
+    }
 }
 
 // Global animation state
@@ -2848,6 +2994,9 @@ async function initializeApp() {
         // Initialize AI Assistant
         initializeAIAssistant();
         
+        // Initialize AI Notes Chat
+        initializeAiNotesChat();
+
         // Initialize Voice Assistant
         initializeVoiceAssistant();
         
