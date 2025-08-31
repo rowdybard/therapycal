@@ -1804,21 +1804,22 @@ function initializeCalendar() {
         headerToolbar: false,
         stickyHeaderDates: false, // Disable sticky positioning in list view
         // Standard calendar settings
-        fixedWeekCount: false,
-        showNonCurrentDates: false,
+        fixedWeekCount: true,
+        showNonCurrentDates: true,
         // Force day headers to show day names instead of numbers
         dayHeaderFormat: {
             weekday: 'short'  // Mon, Tue, Wed, etc.
         },
-        height: '100%',
-        contentHeight: '100%',
-        expandRows: true,
+        height: 'auto',
+        contentHeight: 'auto',
+        expandRows: false,
         editable: true,
         selectable: true,
         selectMirror: true,
         selectOverlap: false, // Prevent selecting over existing events
         selectConstraint: 'businessHours', // Only allow selection during business hours
         dayMaxEvents: true,
+        height: 'parent',
         weekends: true,
         nowIndicator: true,
         now: function() {
