@@ -21,6 +21,8 @@ let clients = [];
 let appointments = [];
 let providers = [];
 let undoStack = [];
+let teamMembers = [];
+let currentInviteCode = null;
 let currentUser = null;
 let isDarkMode = false;
 let isPrivacyMode = false;
@@ -1069,18 +1071,45 @@ async function deleteAppointment(appointmentId) {
 }
 
 // Data listeners
-function setupDataListeners() {
+async function setupDataListeners() {
     console.log('Setting up Firebase data listeners...');
     console.log('Database instance check:', db);
     
     try {
         if (!useApiBackend) {
-            // Listen for client changes (scoped to current user)
-            const clientsQuery = query(
-                collection(db, 'clients'),
-                where('ownerUid', '==', auth.currentUser ? auth.currentUser.uid : null),
-                orderBy('name')
+            // Get team UIDs to include in data queries
+            const teamOwnerUids = [auth.currentUser.uid];
+            
+            // Get teams where current user is a member
+            const memberTeamsQuery = query(
+                collection(db, 'teams'),
+                where('memberId', '==', auth.currentUser.uid)
             );
+            try {
+                const memberTeamsSnapshot = await getDocs(memberTeamsQuery);
+                memberTeamsSnapshot.docs.forEach(doc => {
+                    const data = doc.data();
+                    if (!teamOwnerUids.includes(data.ownerId)) {
+                        teamOwnerUids.push(data.ownerId);
+                    }
+                });
+                console.log('Loading data for team owners:', teamOwnerUids);
+            } catch (error) {
+                console.warn('Could not load team data:', error);
+            }
+            
+            // Listen for client changes (scoped to current user and team owners)
+            const clientsQuery = teamOwnerUids.length === 1 ? 
+                query(
+                    collection(db, 'clients'),
+                    where('ownerUid', '==', auth.currentUser.uid),
+                    orderBy('name')
+                ) :
+                query(
+                    collection(db, 'clients'),
+                    where('ownerUid', 'in', teamOwnerUids.slice(0, 10)), // Firestore limit
+                    orderBy('name')
+                );
         onSnapshot(clientsQuery, 
             (snapshot) => {
                 console.log('Clients snapshot received:', snapshot.size, 'documents');
@@ -1103,10 +1132,16 @@ function setupDataListeners() {
         }
         
         if (!useApiBackend) {
-            // Listen for provider changes (scoped to current user)
-            const providersQuery = query(
+                    // Listen for provider changes (scoped to current user and team owners)
+        const providersQuery = teamOwnerUids.length === 1 ? 
+            query(
                 collection(db, 'providers'),
-                where('ownerUid', '==', auth.currentUser ? auth.currentUser.uid : null),
+                where('ownerUid', '==', auth.currentUser.uid),
+                orderBy('name')
+            ) :
+            query(
+                collection(db, 'providers'),
+                where('ownerUid', 'in', teamOwnerUids.slice(0, 10)), // Firestore limit
                 orderBy('name')
             );
         onSnapshot(providersQuery, 
@@ -1130,12 +1165,18 @@ function setupDataListeners() {
         }
         
         if (!useApiBackend) {
-            // Listen for appointment changes (scoped to current user)
-            const appointmentsQuery = query(
-                collection(db, 'appointments'),
-                where('ownerUid', '==', auth.currentUser ? auth.currentUser.uid : null),
-                orderBy('start')
-            );
+            // Listen for appointment changes (scoped to current user and team owners)
+            const appointmentsQuery = teamOwnerUids.length === 1 ? 
+                query(
+                    collection(db, 'appointments'),
+                    where('ownerUid', '==', auth.currentUser.uid),
+                    orderBy('start')
+                ) :
+                query(
+                    collection(db, 'appointments'),
+                    where('ownerUid', 'in', teamOwnerUids.slice(0, 10)), // Firestore limit
+                    orderBy('start')
+                );
         onSnapshot(appointmentsQuery, 
             (snapshot) => {
                 console.log('Appointments snapshot received:', snapshot.size, 'documents');
@@ -3018,7 +3059,7 @@ async function initializeApp() {
                 if (useApiBackend) {
                     await loadDataFromApi();
                 } else {
-        setupDataListeners();
+        await setupDataListeners();
                 }
             }
         });
@@ -3035,6 +3076,9 @@ async function initializeApp() {
         // Initialize Voice Assistant
         initializeVoiceAssistant();
         
+        // Initialize Team Management
+        initializeTeamManagement();
+        
         hideLoading();
         showToast('Application loaded successfully');
         
@@ -3045,6 +3089,298 @@ async function initializeApp() {
         hideLoading();
     }
 }
+
+// Team Management Functions
+async function initializeTeamManagement() {
+    // Load current team members
+    await loadTeamMembers();
+    
+    // Set up event listeners
+    const manageTeamBtn = document.getElementById('manage-team-btn');
+    const closeTeamModal = document.getElementById('close-team-modal');
+    const generateInviteBtn = document.getElementById('generate-invite-btn');
+    const copyInviteBtn = document.getElementById('copy-invite-btn');
+    const joinTeamBtn = document.getElementById('join-team-btn');
+    
+    if (manageTeamBtn) {
+        manageTeamBtn.addEventListener('click', showTeamModal);
+    }
+    
+    if (closeTeamModal) {
+        closeTeamModal.addEventListener('click', hideTeamModal);
+    }
+    
+    if (generateInviteBtn) {
+        generateInviteBtn.addEventListener('click', generateInviteLink);
+    }
+    
+    if (copyInviteBtn) {
+        copyInviteBtn.addEventListener('click', copyInviteLink);
+    }
+    
+    if (joinTeamBtn) {
+        joinTeamBtn.addEventListener('click', joinTeam);
+    }
+    
+    // Check URL for invite code
+    checkForInviteCode();
+}
+
+async function loadTeamMembers() {
+    if (!auth.currentUser) return;
+    
+    try {
+        // Load team relationships
+        const teamsQuery = query(
+            collection(db, 'teams'),
+            where('ownerId', '==', auth.currentUser.uid)
+        );
+        
+        const memberQuery = query(
+            collection(db, 'teams'),
+            where('memberId', '==', auth.currentUser.uid)
+        );
+        
+        const [ownedTeams, memberTeams] = await Promise.all([
+            getDocs(teamsQuery),
+            getDocs(memberQuery)
+        ]);
+        
+        teamMembers = [];
+        
+        // Add members where current user is owner
+        for (const doc of ownedTeams.docs) {
+            const data = doc.data();
+            teamMembers.push({
+                id: doc.id,
+                email: data.memberEmail,
+                role: 'member',
+                addedAt: data.createdAt?.toDate(),
+                isOwner: false
+            });
+        }
+        
+        // Add owners where current user is member
+        for (const doc of memberTeams.docs) {
+            const data = doc.data();
+            teamMembers.push({
+                id: doc.id,
+                email: data.ownerEmail,
+                role: 'owner',
+                addedAt: data.createdAt?.toDate(),
+                isOwner: true
+            });
+        }
+        
+        renderTeamMembers();
+        
+    } catch (error) {
+        console.error('Error loading team members:', error);
+    }
+}
+
+function renderTeamMembers() {
+    const teamList = document.getElementById('team-members-list');
+    const currentTeamList = document.getElementById('current-team-list');
+    
+    if (!teamList) return;
+    
+    if (teamMembers.length === 0) {
+        teamList.innerHTML = '<div class="text-gray-400 italic">No team members</div>';
+        if (currentTeamList) {
+            currentTeamList.innerHTML = '<div class="text-gray-400 italic text-sm">No team members</div>';
+        }
+        return;
+    }
+    
+    const memberHTML = teamMembers.map(member => {
+        const roleText = member.isOwner ? 'Calendar Owner' : 'Team Member';
+        const roleColor = member.isOwner ? 'text-blue-600' : 'text-green-600';
+        return `
+            <div class="flex justify-between items-center">
+                <div>
+                    <div class="font-medium">${member.email}</div>
+                    <div class="text-xs ${roleColor}">${roleText}</div>
+                </div>
+                ${!member.isOwner ? `<button onclick="removeTeamMember('${member.id}')" class="text-red-500 hover:text-red-700 text-xs">Remove</button>` : ''}
+            </div>
+        `;
+    }).join('');
+    
+    teamList.innerHTML = memberHTML;
+    if (currentTeamList) {
+        currentTeamList.innerHTML = memberHTML;
+    }
+}
+
+function showTeamModal() {
+    const modal = document.getElementById('team-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        loadTeamMembers();
+        generateInviteLink();
+    }
+}
+
+function hideTeamModal() {
+    const modal = document.getElementById('team-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+async function generateInviteLink() {
+    if (!auth.currentUser) return;
+    
+    try {
+        // Generate unique invite code
+        const inviteCode = `invite_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Store invite in Firestore
+        await addDoc(collection(db, 'invites'), {
+            code: inviteCode,
+            ownerId: auth.currentUser.uid,
+            ownerEmail: auth.currentUser.email,
+            createdAt: Timestamp.now(),
+            used: false,
+            expiresAt: Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)) // 7 days
+        });
+        
+        currentInviteCode = inviteCode;
+        const inviteUrl = `${window.location.origin}${window.location.pathname}?invite=${inviteCode}`;
+        
+        const inviteLinkInput = document.getElementById('invite-link');
+        if (inviteLinkInput) {
+            inviteLinkInput.value = inviteUrl;
+        }
+        
+        showToast('Invite link generated successfully!');
+        
+    } catch (error) {
+        console.error('Error generating invite link:', error);
+        showToast('Failed to generate invite link', 'error');
+    }
+}
+
+async function copyInviteLink() {
+    const inviteLinkInput = document.getElementById('invite-link');
+    if (inviteLinkInput && inviteLinkInput.value) {
+        try {
+            await navigator.clipboard.writeText(inviteLinkInput.value);
+            showToast('Invite link copied to clipboard!');
+        } catch (error) {
+            // Fallback for older browsers
+            inviteLinkInput.select();
+            document.execCommand('copy');
+            showToast('Invite link copied to clipboard!');
+        }
+    }
+}
+
+async function joinTeam() {
+    const inviteCodeInput = document.getElementById('join-invite-code');
+    const inviteCode = inviteCodeInput?.value?.trim();
+    
+    if (!inviteCode || !auth.currentUser) {
+        showToast('Please enter a valid invite code', 'error');
+        return;
+    }
+    
+    try {
+        // Find the invite
+        const inviteQuery = query(
+            collection(db, 'invites'),
+            where('code', '==', inviteCode),
+            where('used', '==', false)
+        );
+        
+        const inviteSnapshot = await getDocs(inviteQuery);
+        
+        if (inviteSnapshot.empty) {
+            showToast('Invalid or expired invite code', 'error');
+            return;
+        }
+        
+        const inviteDoc = inviteSnapshot.docs[0];
+        const inviteData = inviteDoc.data();
+        
+        // Check if invite hasn't expired
+        if (inviteData.expiresAt.toDate() < new Date()) {
+            showToast('This invite has expired', 'error');
+            return;
+        }
+        
+        // Check if user is trying to join their own team
+        if (inviteData.ownerId === auth.currentUser.uid) {
+            showToast('You cannot join your own team', 'error');
+            return;
+        }
+        
+        // Add team relationship
+        await addDoc(collection(db, 'teams'), {
+            ownerId: inviteData.ownerId,
+            ownerEmail: inviteData.ownerEmail,
+            memberId: auth.currentUser.uid,
+            memberEmail: auth.currentUser.email,
+            createdAt: Timestamp.now(),
+            inviteCode: inviteCode
+        });
+        
+        // Mark invite as used
+        await updateDoc(doc(db, 'invites', inviteDoc.id), {
+            used: true,
+            usedBy: auth.currentUser.uid,
+            usedAt: Timestamp.now()
+        });
+        
+        showToast('Successfully joined the team!');
+        inviteCodeInput.value = '';
+        hideTeamModal();
+        
+        // Reload data to include new team's calendar
+        await initializeData();
+        renderCalendarEvents();
+        
+    } catch (error) {
+        console.error('Error joining team:', error);
+        showToast('Failed to join team', 'error');
+    }
+}
+
+async function removeTeamMember(teamId) {
+    if (!confirm('Are you sure you want to remove this team member?')) return;
+    
+    try {
+        await deleteDoc(doc(db, 'teams', teamId));
+        showToast('Team member removed successfully');
+        loadTeamMembers();
+    } catch (error) {
+        console.error('Error removing team member:', error);
+        showToast('Failed to remove team member', 'error');
+    }
+}
+
+function checkForInviteCode() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const inviteCode = urlParams.get('invite');
+    
+    if (inviteCode && auth.currentUser) {
+        // Auto-fill the invite code and show team modal
+        setTimeout(() => {
+            const inviteInput = document.getElementById('join-invite-code');
+            if (inviteInput) {
+                inviteInput.value = inviteCode;
+                showTeamModal();
+            }
+        }, 1000);
+        
+        // Clean URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+}
+
+// Make removeTeamMember available globally
+window.removeTeamMember = removeTeamMember;
 
 // Start the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', initializeApp);

@@ -1455,6 +1455,19 @@
         </div>
 
         <div class="flex-1 p-4 overflow-y-auto min-h-0">
+            <!-- Team Management Section -->
+            <div class="mb-4 pb-3 border-b border-gray-200">
+                <div class="flex justify-between items-center mb-2">
+                    <h2 class="text-sm font-semibold text-gray-800">Team Access</h2>
+                    <button id="manage-team-btn" class="text-indigo-600 hover:text-indigo-800" title="Manage Team">
+                        <span class="material-icons text-base">group</span>
+                    </button>
+                </div>
+                <div id="team-members-list" class="space-y-1 text-xs text-gray-600">
+                    <div class="text-gray-400 italic">Loading team...</div>
+                </div>
+            </div>
+
             <div class="flex justify-between items-center mb-3">
                 <h2 class="text-lg font-semibold text-gray-700">Clients</h2>
                 <div class="flex items-center space-x-2">
@@ -1554,6 +1567,57 @@
     </main>
     
     <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-10 hidden md:hidden"></div>
+
+    <!-- Team Management Modal -->
+    <div id="team-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-30 hidden">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">Team Management</h2>
+                <button id="close-team-modal" class="text-gray-500 hover:text-gray-700">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            
+            <!-- Current Team Members -->
+            <div class="mb-6">
+                <h3 class="text-sm font-semibold text-gray-700 mb-3">Current Team Members</h3>
+                <div id="current-team-list" class="space-y-2 max-h-32 overflow-y-auto">
+                    <div class="text-gray-400 italic text-sm">Loading...</div>
+                </div>
+            </div>
+            
+            <!-- Invite New Member -->
+            <div class="mb-6">
+                <h3 class="text-sm font-semibold text-gray-700 mb-3">Invite New Member</h3>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Invite Link</label>
+                        <div class="flex">
+                            <input id="invite-link" type="text" readonly class="flex-1 border border-gray-300 rounded-l-md px-3 py-2 text-sm bg-gray-50" placeholder="Generating link...">
+                            <button id="copy-invite-btn" class="px-3 py-2 bg-indigo-600 text-white rounded-r-md hover:bg-indigo-700 text-sm">
+                                Copy
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Share this link with team members to give them admin access to your calendar.</p>
+                    </div>
+                    <button id="generate-invite-btn" class="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 text-sm">
+                        Generate New Invite Link
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Accept Invite Section -->
+            <div class="border-t pt-4">
+                <h3 class="text-sm font-semibold text-gray-700 mb-3">Join Another Team</h3>
+                <div class="flex space-x-2">
+                    <input id="join-invite-code" type="text" placeholder="Enter invite code" class="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm">
+                    <button id="join-team-btn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm">
+                        Join
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Client Modal -->
     <div id="client-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-30">
@@ -2163,7 +2227,7 @@
     <script type="module" src="firebase-config.js?v=2"></script>
     <script type="module" src="tts-service.js?v=5"></script>
     <script type="module" src="ai-assistant.js?v=7"></script>
-    <script type="module" src="app.js?v=21"></script>
+    <script type="module" src="app.js?v=22"></script>
     
     <!-- Authentication Script -->
     <script type="module">
