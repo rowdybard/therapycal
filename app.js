@@ -38,7 +38,7 @@ let dataListenersInitialized = false;
 
 // Backend API configuration (Render Web Service)
 const API_BASE_URL = (typeof window !== 'undefined' && window.API_BASE_URL) ? window.API_BASE_URL : null;
-const useApiBackend = !!API_BASE_URL;
+const useApiBackend = false; // Disabled - using Firebase Firestore instead
 
 // API helpers
 async function getAuthHeader() {
