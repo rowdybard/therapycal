@@ -1516,8 +1516,8 @@
         </div>
     </aside>
 
-    <main class="flex-1 flex flex-col h-screen">
-        <header class="bg-white p-2 border-b border-gray-200 flex flex-col md:flex-row md:items-center md:justify-between space-y-2 md:space-y-0">
+    <main class="flex-1 flex flex-col h-screen min-h-0">
+        <header class="bg-white p-2 border-b border-gray-200 flex flex-col md:flex-row md:items-center md:justify-between space-y-2 md:space-y-0 flex-shrink-0">
             <div class="flex items-center justify-between w-full">
                 <div class="flex items-center space-x-2">
                     <button id="menu-toggle-btn" class="md:hidden p-2 text-gray-600">
@@ -1564,8 +1564,8 @@
             </div>
         </header>
 
-        <div class="flex-grow p-2 md:p-3" style="display: flex; flex-direction: column; overflow: hidden;">
-            <div id='calendar' class="bg-white rounded-lg shadow-sm flex-1" style="height: calc(100vh - 140px);"></div>
+        <div class="flex-grow p-2 md:p-3 min-h-0" style="display: flex; flex-direction: column; overflow: hidden;">
+            <div id='calendar' class="bg-white rounded-lg shadow-sm flex-1 min-h-0 h-full"></div>
         </div>
     </main>
     

@@ -1810,8 +1810,8 @@ function initializeCalendar() {
         dayHeaderFormat: {
             weekday: 'short'  // Mon, Tue, Wed, etc.
         },
-        height: 'auto',
-        contentHeight: 'auto',
+        height: '100%',
+        contentHeight: '100%',
         expandRows: true,
         editable: true,
         selectable: true,
