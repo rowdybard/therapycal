@@ -751,27 +751,28 @@ async function saveAppointment(appointmentData) {
                 showToast('Appointment updated successfully');
                 await loadDataFromApi();
             } else {
-            const appointmentRef = doc(db, 'appointments', appointmentData.id);
-            
-            // Check if we're changing from non-recurring to recurring
-            const originalAppointment = appointments.find(apt => apt.id === appointmentData.id);
-            const wasRecurring = originalAppointment && originalAppointment.repeats && originalAppointment.repeats !== 'none';
-            const isNowRecurring = appointmentDoc.repeats && appointmentDoc.repeats !== 'none';
-            
-            if (!wasRecurring && isNowRecurring) {
-                // Converting to recurring: delete the original and create recurring series
-                console.log('Converting appointment to recurring series');
-                await deleteDoc(appointmentRef);
-                await createRecurringAppointments(appointmentDoc);
-                showToast('Recurring appointments created successfully');
-            } else if (wasRecurring && !isNowRecurring) {
-                // Converting from recurring to single: just update this one
-                await updateDoc(appointmentRef, appointmentDoc);
-                showToast('Appointment updated to non-recurring');
-            } else {
-                // Standard update
-                await updateDoc(appointmentRef, appointmentDoc);
-                showToast('Appointment updated successfully');
+                const appointmentRef = doc(db, 'appointments', appointmentData.id);
+                
+                // Check if we're changing from non-recurring to recurring
+                const originalAppointment = appointments.find(apt => apt.id === appointmentData.id);
+                const wasRecurring = originalAppointment && originalAppointment.repeats && originalAppointment.repeats !== 'none';
+                const isNowRecurring = appointmentDoc.repeats && appointmentDoc.repeats !== 'none';
+                
+                if (!wasRecurring && isNowRecurring) {
+                    // Converting to recurring: delete the original and create recurring series
+                    console.log('Converting appointment to recurring series');
+                    await deleteDoc(appointmentRef);
+                    await createRecurringAppointments(appointmentDoc);
+                    showToast('Recurring appointments created successfully');
+                } else if (wasRecurring && !isNowRecurring) {
+                    // Converting from recurring to single: just update this one
+                    await updateDoc(appointmentRef, appointmentDoc);
+                    showToast('Appointment updated to non-recurring');
+                } else {
+                    // Standard update
+                    await updateDoc(appointmentRef, appointmentDoc);
+                    showToast('Appointment updated successfully');
+                }
             }
         } else {
             // Add new appointment
