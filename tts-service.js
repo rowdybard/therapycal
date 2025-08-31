@@ -18,7 +18,18 @@ class TTSService {
     async initializeService() {
         // Use backend to check if TTS is available
         try {
-            const resp = await fetch('/api/voices');
+            // Wait for authentication if needed
+            let headers = {};
+            if (auth?.currentUser) {
+                try {
+                    const token = await auth.currentUser.getIdToken();
+                    headers['Authorization'] = `Bearer ${token}`;
+                } catch (authError) {
+                    console.log('Could not get auth token for voices, trying without auth:', authError);
+                }
+            }
+            
+            const resp = await fetch('/api/voices', { headers });
             if (!resp.ok) throw new Error('Voices not available');
             const data = await resp.json();
             // Prefer explicit voice id, then match by name

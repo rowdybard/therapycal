@@ -137,19 +137,27 @@ app.post('/api/tts', authenticate, async (req, res) => {
 
 // ElevenLabs list voices (no auth required)
 app.get('/api/voices', async (req, res) => {
+  console.log('[/api/voices] Request received');
   try {
-    if (!ELEVENLABS_API_KEY) return res.status(500).json({ error: 'ELEVENLABS_API_KEY missing' });
+    if (!ELEVENLABS_API_KEY) {
+      console.log('[/api/voices] Missing ElevenLabs API key');
+      return res.status(500).json({ error: 'ELEVENLABS_API_KEY missing' });
+    }
+    console.log('[/api/voices] Fetching voices from ElevenLabs');
     const resp = await fetch('https://api.elevenlabs.io/v1/voices', {
       method: 'GET',
       headers: { 'xi-api-key': ELEVENLABS_API_KEY }
     });
     if (!resp.ok) {
       const text = await resp.text();
+      console.log('[/api/voices] ElevenLabs error:', resp.status, text);
       return res.status(resp.status).json({ error: 'ElevenLabs error', details: text });
     }
     const data = await resp.json();
+    console.log('[/api/voices] Successfully fetched', data.voices?.length || 0, 'voices');
     res.json(data);
   } catch (e) {
+    console.error('[/api/voices] Error:', e);
     res.status(500).json({ error: 'Voices fetch failed', details: e.message });
   }
 });
