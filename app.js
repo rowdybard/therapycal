@@ -1800,7 +1800,8 @@ function initializeCalendar() {
     // Compute available viewport height based on the calendar's top position
     function getCalendarHeight() {
         const rect = calendarEl.getBoundingClientRect();
-        const available = window.innerHeight - rect.top - 8; // small safety margin
+        const RESERVED_BOTTOM = 110; // extra space to avoid any scroll (~100px as reported)
+        const available = window.innerHeight - rect.top - RESERVED_BOTTOM;
         return Math.max(560, available);
     }
     
