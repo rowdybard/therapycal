@@ -1797,13 +1797,7 @@ function initializeCalendar() {
     const isMobile = window.innerWidth < 768;
     const initialView = isMobile ? 'timeGridWeek' : 'dayGridMonth';
 
-    // Compute available viewport height based on the calendar's top position
-    function getCalendarHeight() {
-        const rect = calendarEl.getBoundingClientRect();
-        const RESERVED_BOTTOM = 110; // extra space to avoid any scroll (~100px as reported)
-        const available = window.innerHeight - rect.top - RESERVED_BOTTOM;
-        return Math.max(560, available);
-    }
+
     
     calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: initialView,
@@ -1818,7 +1812,7 @@ function initializeCalendar() {
         dayHeaderFormat: {
             weekday: 'short'  // Mon, Tue, Wed, etc.
         },
-        height: getCalendarHeight(),
+        height: 650,
         expandRows: true,
         editable: true,
         selectable: true,
@@ -1828,9 +1822,7 @@ function initializeCalendar() {
         dayMaxEvents: true,
         weekends: true,
         nowIndicator: true,
-        windowResize: function() {
-            calendar.setOption('height', getCalendarHeight());
-        },
+
         now: function() {
             // Use Eastern Daylight Time (EDT) timezone
             const now = new Date();
