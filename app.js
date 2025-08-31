@@ -2367,38 +2367,56 @@ function initializeAiNotesChat() {
         appendMessage('user', text);
         input.value = '';
 
-        // Build messages with short context from convo
-        const recent = convo.slice(-8);
-        const messages = [
-            { role: 'system', content: 'You are a helpful notes assistant for a therapy practice. Keep answers concise. You can reference appointments, clients, and providers the user has in the app, but if you lack details, ask a short clarifying question.' },
-            ...recent,
-            { role: 'user', content: text }
-        ];
-
         try {
-            // Use backend chat proxy with Firebase auth
-            const user = auth?.currentUser;
-            if (!user) throw new Error('Not authenticated');
-            const token = await user.getIdToken();
-            const resp = await fetch('/api/chat', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ model: 'gpt-4o', messages, temperature: 0.7, max_tokens: 500 })
-            });
-            if (!resp.ok) {
-                const txt = await resp.text();
-                throw new Error(txt || `HTTP ${resp.status}`);
+            let reply;
+            
+            // Use the new calendar management agent first
+            if (window.aiAssistant) {
+                reply = await window.aiAssistant.processCalendarCommand(text);
+                
+                // If response indicates calendar action was taken, refresh UI
+                if (reply.includes('Created') || reply.includes('Deleted') || reply.includes('Added note') || reply.includes('Updated')) {
+                    setTimeout(() => {
+                        renderCalendarEvents();
+                        renderClientsList();
+                        updateWeeklySummary();
+                    }, 500);
+                }
+            } else {
+                // Fallback to regular chat if calendar agent not available
+                const recent = convo.slice(-8);
+                const messages = [
+                    { role: 'system', content: 'You are a helpful calendar assistant for a therapy practice. You can create appointments, manage clients, and help with scheduling. Default provider is Alex. Keep responses concise and helpful.' },
+                    ...recent,
+                    { role: 'user', content: text }
+                ];
+
+                const user = auth?.currentUser;
+                if (!user) throw new Error('Not authenticated');
+                const token = await user.getIdToken();
+                const resp = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ model: 'gpt-4o', messages, temperature: 0.7, max_tokens: 500 })
+                });
+                if (!resp.ok) {
+                    const txt = await resp.text();
+                    throw new Error(txt || `HTTP ${resp.status}`);
+                }
+                const data = await resp.json();
+                reply = data.choices?.[0]?.message?.content || '...';
             }
-            const data = await resp.json();
-            const reply = data.choices?.[0]?.message?.content || '...';
+            
             appendMessage('assistant', reply);
+            const recent = convo.slice(-8);
             convo = [...recent, { role: 'user', content: text }, { role: 'assistant', content: reply }];
+            
         } catch (err) {
-            appendMessage('assistant', 'Sorry, I had trouble responding just now.');
-            console.error('AI notes chat error:', err);
+            appendMessage('assistant', 'Sorry, I had trouble responding just now. Please try again.');
+            console.error('AI chat error:', err);
         }
     });
 
@@ -3047,6 +3065,20 @@ document.addEventListener('visibilitychange', () => {
 
 // AI Assistant Functions
 function initializeAIAssistant() {
+    // Make necessary functions available globally for AI agent
+    window.saveAppointment = saveAppointment;
+    window.saveClient = saveClient;
+    window.deleteAppointment = deleteAppointment;
+    window.appointments = appointments;
+    window.clients = clients;
+    window.providers = providers;
+    
+    // Initialize calendar management agent
+    if (window.TherapyAIAssistant) {
+        window.aiAssistant = new window.TherapyAIAssistant();
+        console.log('AI Calendar Management Agent initialized');
+    }
+    
     // AI Assistant modal handlers
     if (elements.aiAssistantBtn) {
         elements.aiAssistantBtn.addEventListener('click', showAIAssistant);

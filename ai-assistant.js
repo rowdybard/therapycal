@@ -90,6 +90,235 @@ class TherapyAIAssistant {
         this.model = "gpt-4o"; // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
     }
 
+    // Calendar Management Agent - handles all calendar operations via chat
+    async processCalendarCommand(message, context = {}) {
+        const client = initializeOpenAI();
+        if (!client) {
+            throw new Error('OpenAI API key not configured. Please set OPENAI_API_KEY in your environment.');
+        }
+
+        // Get current data
+        const currentAppointments = window.appointments || [];
+        const currentClients = window.clients || [];
+        const currentProviders = window.providers || [];
+        
+        // Find Alex as default provider
+        const alexProvider = currentProviders.find(p => 
+            p.name.toLowerCase().includes('alex')
+        ) || (currentProviders.length > 0 ? currentProviders[0] : null);
+
+        const systemPrompt = `You are a calendar management assistant for a therapy practice. You can:
+
+1. CREATE APPOINTMENTS:
+   - Parse dates/times from natural language
+   - Default provider: ${alexProvider ? alexProvider.name : 'Alex'} (ID: ${alexProvider?.id || 'default'})
+   - Support recurring appointments (weekly, biweekly, monthly)
+   - Duration defaults to 50 minutes if not specified
+
+2. MANAGE CLIENTS:
+   - Create new clients with name, email, phone
+   - Add notes to existing client profiles
+   - List/search clients
+
+3. APPOINTMENT OPERATIONS:
+   - List appointments for specific dates/clients
+   - Edit appointment details
+   - Cancel/delete appointments
+   - Check for scheduling conflicts
+
+4. DATA CONTEXT:
+Current date: ${new Date().toLocaleDateString()}
+Clients: ${currentClients.map(c => `${c.name} (${c.id})`).join(', ') || 'None'}
+Providers: ${currentProviders.map(p => `${p.name} (${p.id})`).join(', ') || 'None'}
+Recent appointments: ${currentAppointments.slice(-5).map(a => {
+    const client = currentClients.find(c => c.id === a.clientId);
+    return `${client?.name || 'Unknown'} - ${a.start ? new Date(a.start).toLocaleDateString() : 'No date'}`;
+}).join(', ') || 'None'}
+
+RESPOND WITH JSON for actions, or plain text for information:
+For actions: {"action": "create_appointment|create_client|edit_appointment|delete_appointment|add_client_note", "data": {...}}
+For info: Just respond with helpful text.
+
+User message: "${message}"`;
+
+        try {
+            const response = await client.chat.completions.create({
+                model: this.model,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: message }
+                ],
+                temperature: 0.3,
+                max_tokens: 1000
+            });
+
+            const aiResponse = response.choices[0].message.content;
+            
+            // Try to parse as JSON for actions
+            try {
+                const actionData = JSON.parse(aiResponse);
+                if (actionData.action) {
+                    return await this.executeCalendarAction(actionData);
+                }
+            } catch (e) {
+                // Not JSON, just return the text response
+            }
+            
+            return aiResponse;
+            
+        } catch (error) {
+            console.error('Calendar AI error:', error);
+            return `I apologize, but I encountered an error: ${error.message}. Please try rephrasing your request.`;
+        }
+    }
+
+    // Execute calendar actions
+    async executeCalendarAction(actionData) {
+        const { action, data } = actionData;
+        
+        try {
+            switch (action) {
+                case 'create_appointment':
+                    return await this.createAppointment(data);
+                case 'create_client':
+                    return await this.createClient(data);
+                case 'edit_appointment':
+                    return await this.editAppointment(data);
+                case 'delete_appointment':
+                    return await this.deleteAppointment(data);
+                case 'add_client_note':
+                    return await this.addClientNote(data);
+                default:
+                    return `I don't know how to perform the action: ${action}`;
+            }
+        } catch (error) {
+            console.error('Action execution error:', error);
+            return `I encountered an error while ${action.replace('_', ' ')}: ${error.message}`;
+        }
+    }
+
+    // Create appointment
+    async createAppointment(data) {
+        const { clientName, date, time, duration = 50, recurring = 'none', notes = '' } = data;
+        
+        // Find or create client
+        let client = window.clients.find(c => 
+            c.name.toLowerCase().includes(clientName.toLowerCase())
+        );
+        
+        if (!client) {
+            // Create new client
+            const newClientData = {
+                name: clientName,
+                email: '',
+                phone: '',
+                color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
+                notes: ''
+            };
+            await window.saveClient(newClientData);
+            client = window.clients.find(c => c.name === clientName);
+        }
+
+        if (!client) {
+            return `I couldn't create the client "${clientName}". Please try again.`;
+        }
+
+        // Find Alex or default provider
+        const provider = window.providers.find(p => 
+            p.name.toLowerCase().includes('alex')
+        ) || window.providers[0];
+
+        if (!provider) {
+            return `No provider available. Please create a provider first.`;
+        }
+
+        // Parse date and time
+        const appointmentDate = new Date(date + ' ' + time);
+        if (isNaN(appointmentDate.getTime())) {
+            return `I couldn't parse the date and time "${date} ${time}". Please use a format like "2025-01-15 2:00 PM".`;
+        }
+
+        const appointmentData = {
+            clientId: client.id,
+            providerId: provider.id,
+            start: appointmentDate,
+            duration: parseInt(duration),
+            repeats: recurring,
+            notes: notes,
+            priority: 'normal',
+            status: 'scheduled'
+        };
+
+        await window.saveAppointment(appointmentData);
+        
+        const recurringText = recurring !== 'none' ? ` (${recurring})` : '';
+        return `Created appointment for ${client.name} with ${provider.name} on ${appointmentDate.toLocaleDateString()} at ${appointmentDate.toLocaleTimeString()}${recurringText}. Duration: ${duration} minutes.`;
+    }
+
+    // Create client
+    async createClient(data) {
+        const { name, email = '', phone = '', notes = '' } = data;
+        
+        const clientData = {
+            name: name,
+            email: email,
+            phone: phone,
+            color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
+            notes: notes
+        };
+
+        await window.saveClient(clientData);
+        return `Created new client: ${name}${email ? ` (${email})` : ''}${phone ? ` - ${phone}` : ''}`;
+    }
+
+    // Add note to client
+    async addClientNote(data) {
+        const { clientName, note } = data;
+        
+        const client = window.clients.find(c => 
+            c.name.toLowerCase().includes(clientName.toLowerCase())
+        );
+
+        if (!client) {
+            return `I couldn't find a client named "${clientName}".`;
+        }
+
+        const updatedClient = {
+            ...client,
+            notes: client.notes ? `${client.notes}\n\n${new Date().toLocaleDateString()}: ${note}` : note
+        };
+
+        await window.saveClient(updatedClient);
+        return `Added note to ${client.name}'s profile.`;
+    }
+
+    // Delete appointment
+    async deleteAppointment(data) {
+        const { clientName, date } = data;
+        
+        const client = window.clients.find(c => 
+            c.name.toLowerCase().includes(clientName.toLowerCase())
+        );
+
+        if (!client) {
+            return `I couldn't find a client named "${clientName}".`;
+        }
+
+        const targetDate = new Date(date);
+        const appointment = window.appointments.find(apt => {
+            const aptDate = new Date(apt.start);
+            return apt.clientId === client.id && 
+                   aptDate.toDateString() === targetDate.toDateString();
+        });
+
+        if (!appointment) {
+            return `I couldn't find an appointment for ${client.name} on ${targetDate.toLocaleDateString()}.`;
+        }
+
+        await window.deleteAppointment(appointment.id);
+        return `Deleted appointment for ${client.name} on ${targetDate.toLocaleDateString()}.`;
+    }
+
     // Generate appointment summary and insights
     async generateAppointmentSummary(appointments, clients, providers, timeframe = 'week') {
         const client = initializeOpenAI();
