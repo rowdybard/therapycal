@@ -95,7 +95,7 @@ class TTSService {
                 // Use same-origin server proxy (preferred)
                 const user = auth?.currentUser;
                 const token = user ? await user.getIdToken() : null;
-                const resp = await fetch(`/api/tts`, {
+                const sendTts = async (voiceIdToUse) => fetch(`/api/tts`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -103,7 +103,7 @@ class TTSService {
                     },
                     body: JSON.stringify({
                         text: text,
-                        voiceId: this.voiceId,
+                        voiceId: voiceIdToUse,
                         settings: {
                             stability: options.stability || 0.5,
                             similarity_boost: options.similarity_boost || 0.8,
@@ -112,8 +112,44 @@ class TTSService {
                         }
                     })
                 });
+                
+                let resp = await sendTts(this.voiceId);
                 if (!resp.ok) {
-                    throw new Error(`TTS proxy error: ${resp.status} ${resp.statusText}`);
+                    // Try to extract error details for debugging
+                    let details = '';
+                    try {
+                        const err = await resp.json();
+                        details = err && (err.details || err.error || JSON.stringify(err));
+                    } catch (_) {
+                        try { details = await resp.text(); } catch (_) {}
+                    }
+                    console.warn('TTS proxy first attempt failed:', resp.status, details);
+                    
+                    // Fallback: fetch available voices and try the first one once
+                    try {
+                        const voicesResp = await fetch('/api/voices');
+                        if (voicesResp.ok) {
+                            const voicesData = await voicesResp.json();
+                            const firstVoice = (voicesData.voices || [])[0];
+                            if (firstVoice && firstVoice.voice_id && firstVoice.voice_id !== this.voiceId) {
+                                console.log('Retrying TTS with fallback voice:', firstVoice.name, firstVoice.voice_id);
+                                this.voiceId = firstVoice.voice_id;
+                                resp = await sendTts(this.voiceId);
+                            }
+                        }
+                    } catch (_) {}
+                    
+                    if (!resp.ok) {
+                        // Extract details again for final error
+                        let finalDetails = '';
+                        try {
+                            const err2 = await resp.json();
+                            finalDetails = err2 && (err2.details || err2.error || JSON.stringify(err2));
+                        } catch (_) {
+                            try { finalDetails = await resp.text(); } catch (_) {}
+                        }
+                        throw new Error(`TTS proxy error: ${resp.status} ${resp.statusText} ${finalDetails || ''}`.trim());
+                    }
                 }
                 audioBlob = await resp.blob();
             } else {

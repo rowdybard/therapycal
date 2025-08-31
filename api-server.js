@@ -102,6 +102,7 @@ app.post('/api/tts', authenticate, async (req, res) => {
     if (!ELEVENLABS_API_KEY) return res.status(500).json({ error: 'ELEVENLABS_API_KEY missing' });
     const { text, voiceId, settings } = req.body || {};
     if (!text || !voiceId) return res.status(400).json({ error: 'text and voiceId required' });
+    console.log('[/api/tts] voiceId:', voiceId, 'text.len:', text.length);
     const resp = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: 'POST',
       headers: {
@@ -121,8 +122,9 @@ app.post('/api/tts', authenticate, async (req, res) => {
       })
     });
     if (!resp.ok) {
-      const text = await resp.text();
-      return res.status(resp.status).json({ error: 'ElevenLabs error', details: text });
+      const txt = await resp.text();
+      console.error('[/api/tts] ElevenLabs error', resp.status, txt);
+      return res.status(resp.status).json({ error: 'ElevenLabs error', details: txt });
     }
     res.setHeader('Content-Type', 'audio/mpeg');
     resp.body.pipe(res);
