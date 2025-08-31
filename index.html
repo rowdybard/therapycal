@@ -203,11 +203,8 @@
             }
         }
         
-        /* Calendar height adjustments to fit viewport without scrolling */
+        /* Remove fixed height constraints to let JS control height */
         #calendar {
-            height: calc(100vh - 200px) !important;
-            min-height: 500px !important;
-            max-height: none !important;
             overflow-x: hidden !important; /* Disable horizontal scrolling */
         }
         
@@ -220,24 +217,7 @@
             overflow-x: hidden !important;
         }
         
-        /* Specific adjustments for different screen sizes */
-        @media (max-width: 767px) {
-            #calendar {
-                height: calc(100vh - 250px) !important;
-            }
-        }
-        
-        @media (min-width: 768px) and (max-width: 1023px) {
-            #calendar {
-                height: calc(100vh - 180px) !important;
-            }
-        }
-        
-        @media (min-width: 1024px) {
-            #calendar {
-                height: calc(100vh - 160px) !important;
-            }
-        }
+        /* Let JavaScript control calendar height across all screen sizes */
         
         /* Ensure calendar container takes full available height */
         .flex-grow {
@@ -1499,7 +1479,7 @@
             </div>
             <!-- Moved AI Notes Chat under Clients (sticky at bottom) -->
             <section id="ai-notes" class="mt-3 bg-white rounded-lg shadow-sm p-3 flex flex-col sticky bottom-0 border-t border-gray-200 z-10">
-                <div id="ai-chat-log" class="flex-1 overflow-auto border border-gray-200 rounded p-3 space-y-3" style="font-size: 9pt;"></div>
+                <div id="ai-chat-log" class="overflow-auto border border-gray-200 rounded p-3 space-y-3" style="font-size: 9pt; height: 30%; max-height: 30%;"></div>
                 <form id="ai-chat-form" class="mt-3 flex items-end justify-center">
                     <div class="w-full max-w-md">
                         <div class="text-xs text-gray-500 mb-2 text-right">Powered by GPT</div>
@@ -2179,7 +2159,7 @@
     <script type="module" src="firebase-config.js?v=2"></script>
     <script type="module" src="tts-service.js?v=5"></script>
     <script type="module" src="ai-assistant.js?v=6"></script>
-    <script type="module" src="app.js?v=9"></script>
+    <script type="module" src="app.js?v=11"></script>
     
     <!-- Authentication Script -->
     <script type="module">
