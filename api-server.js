@@ -131,8 +131,8 @@ app.post('/api/tts', authenticate, async (req, res) => {
   }
 });
 
-// ElevenLabs list voices
-app.get('/api/voices', authenticate, async (req, res) => {
+// ElevenLabs list voices (no auth required)
+app.get('/api/voices', async (req, res) => {
   try {
     if (!ELEVENLABS_API_KEY) return res.status(500).json({ error: 'ELEVENLABS_API_KEY missing' });
     const resp = await fetch('https://api.elevenlabs.io/v1/voices', {

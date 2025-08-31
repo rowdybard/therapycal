@@ -7,7 +7,7 @@ class TTSService {
     constructor() {
         this.apiKey = null;
         this.baseUrl = 'https://api.elevenlabs.io/v1';
-        this.voiceId = 'EXAVITQu4vr4xnSDxMaL'; // Default voice (Sarah)
+        this.voiceId = '6OzrBCQf8cjERkYgzSg8'; // Default to "Young Jerome"
         this.isEnabled = false;
         this.isPlaying = false;
         this.currentAudio = null;
@@ -18,18 +18,17 @@ class TTSService {
     async initializeService() {
         // Use backend to check if TTS is available
         try {
-            const user = auth?.currentUser;
-            const token = user ? await user.getIdToken() : null;
-            const resp = await fetch('/api/voices', {
-                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-            });
+            const resp = await fetch('/api/voices');
             if (!resp.ok) throw new Error('Voices not available');
             const data = await resp.json();
-            // Try to find "Young Jerome" voice by name (case-insensitive)
-            const jerome = (data.voices || []).find(v => /young\s*jerome/i.test(v.name));
-            if (jerome && jerome.voice_id) {
-                this.voiceId = jerome.voice_id;
-                console.log('Using voice:', jerome.name, jerome.voice_id);
+            // Prefer explicit voice id, then match by name
+            const voices = data.voices || [];
+            const jeromeById = voices.find(v => v.voice_id === '6OzrBCQf8cjERkYgzSg8');
+            const jeromeByName = voices.find(v => /young\s*jerome/i.test(v.name));
+            const pick = jeromeById || jeromeByName;
+            if (pick && pick.voice_id) {
+                this.voiceId = pick.voice_id;
+                console.log('Using voice:', pick.name, pick.voice_id);
             } else {
                 console.log('Young Jerome voice not found; keeping default');
             }
@@ -43,6 +42,7 @@ class TTSService {
     // Available voices for different personalities
     getVoices() {
         return {
+            youngJerome: '6OzrBCQf8cjERkYgzSg8',
             sarah: 'EXAVITQu4vr4xnSDxMaL', // Professional female voice
             rachel: '21m00Tcm4TlvDq8ikWAM', // Warm female voice  
             adam: 'pNInz6obpgDQGcFmaJgB', // Professional male voice
