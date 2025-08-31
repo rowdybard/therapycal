@@ -1408,9 +1408,24 @@ function updateWeeklySummary() {
     endOfWeek.setDate(startOfWeek.getDate() + 6);
     endOfWeek.setHours(23, 59, 59, 999);
     
-    const weeklyAppointments = appointments.filter(apt => 
-        apt.start >= startOfWeek && apt.start <= endOfWeek
-    );
+    console.log('Weekly summary range:', startOfWeek, 'to', endOfWeek);
+    console.log('Total appointments:', appointments.length);
+    
+    const weeklyAppointments = appointments.filter(apt => {
+        const aptStart = apt.start;
+        const isInRange = aptStart >= startOfWeek && aptStart <= endOfWeek;
+        
+        if (!isInRange && aptStart) {
+            console.log('Appointment outside range:', aptStart, 'repeats:', apt.repeats);
+        }
+        
+        return isInRange && aptStart && apt.duration;
+    });
+    
+    console.log('Weekly appointments found:', weeklyAppointments.length);
+    weeklyAppointments.forEach(apt => {
+        console.log('- Appointment:', apt.start, 'duration:', apt.duration, 'repeats:', apt.repeats);
+    });
     
     const totalMinutes = weeklyAppointments.reduce((sum, apt) => sum + apt.duration, 0);
     const totalHours = Math.round((totalMinutes / 60) * 10) / 10;
@@ -1812,7 +1827,7 @@ function initializeCalendar() {
         dayHeaderFormat: {
             weekday: 'short'  // Mon, Tue, Wed, etc.
         },
-        height: 800,
+        height: 'parent',
         expandRows: true,
         editable: true,
         selectable: true,
