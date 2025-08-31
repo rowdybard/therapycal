@@ -143,7 +143,8 @@ app.post('/api/transcribe', authenticate, async (req, res) => {
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': contentType
       },
-      body: req
+      body: req,
+      duplex: 'half'
     });
     if (!resp.ok) {
       const text = await resp.text();
