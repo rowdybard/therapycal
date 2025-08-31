@@ -1,24 +1,32 @@
 // AI Assistant for Therapy Calendar
 // Handles OpenAI integration for intelligent features
 
+// Import Firebase auth
+import { auth } from './firebase-config.js';
+
 // Note: OpenAI is loaded via CDN in browser environment
 
 // Initialize OpenAI client
 let openai = null;
 
-// Initialize OpenAI when needed
+// Initialize OpenAI using backend API
 function initializeOpenAI() {
-    if (!openai && window.OPENAI_API_KEY) {
-        // Use CDN version of OpenAI
+    if (!openai && window.API_BASE_URL) {
+        // Use backend API proxy
         openai = {
             chat: {
                 completions: {
                     create: async (params) => {
-                        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                        // Get Firebase auth token
+                        const user = auth?.currentUser;
+                        if (!user) throw new Error('Authentication required');
+                        const token = await user.getIdToken();
+                        
+                        const response = await fetch(`${window.API_BASE_URL}/api/chat`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${window.OPENAI_API_KEY}`
+                                'Authorization': `Bearer ${token}`
                             },
                             body: JSON.stringify(params)
                         });
@@ -34,6 +42,11 @@ function initializeOpenAI() {
             audio: {
                 transcriptions: {
                     create: async (params) => {
+                        // Get Firebase auth token
+                        const user = auth?.currentUser;
+                        if (!user) throw new Error('Authentication required');
+                        const token = await user.getIdToken();
+                        
                         const formData = new FormData();
                         formData.append('file', params.file);
                         formData.append('model', params.model);
@@ -41,10 +54,10 @@ function initializeOpenAI() {
                             formData.append('response_format', params.response_format);
                         }
                         
-                        const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+                        const response = await fetch(`${window.API_BASE_URL}/api/transcriptions`, {
                             method: 'POST',
                             headers: {
-                                'Authorization': `Bearer ${window.OPENAI_API_KEY}`
+                                'Authorization': `Bearer ${token}`
                             },
                             body: formData
                         });

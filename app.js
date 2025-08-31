@@ -373,7 +373,7 @@ async function saveProvider(providerData) {
             showToast('Provider updated successfully');
         }
 
-        if (!appointmentData.id) {
+        if (!providerData.id) {
             // Add new provider
             if (useApiBackend) {
                 await apiPost('/api/providers', {
