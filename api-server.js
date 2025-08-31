@@ -5,7 +5,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const admin = require('firebase-admin');
-const fetch = require('node-fetch');
+// Use global fetch (available in Node 18+)
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
