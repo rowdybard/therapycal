@@ -126,8 +126,10 @@ app.post('/api/tts', authenticate, async (req, res) => {
       console.error('[/api/tts] ElevenLabs error', resp.status, txt);
       return res.status(resp.status).json({ error: 'ElevenLabs error', details: txt });
     }
+    // Send as Buffer (avoid piping web stream in Node)
+    const audioBuffer = Buffer.from(await resp.arrayBuffer());
     res.setHeader('Content-Type', 'audio/mpeg');
-    resp.body.pipe(res);
+    res.send(audioBuffer);
   } catch (e) {
     res.status(500).json({ error: 'TTS proxy failed', details: e.message });
   }
