@@ -371,7 +371,9 @@ async function saveProvider(providerData) {
             });
             }
             showToast('Provider updated successfully');
-        } else {
+        }
+
+        if (!appointmentData.id) {
             // Add new provider
             if (useApiBackend) {
                 await apiPost('/api/providers', {
