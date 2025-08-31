@@ -131,6 +131,25 @@ app.post('/api/tts', authenticate, async (req, res) => {
   }
 });
 
+// ElevenLabs list voices
+app.get('/api/voices', authenticate, async (req, res) => {
+  try {
+    if (!ELEVENLABS_API_KEY) return res.status(500).json({ error: 'ELEVENLABS_API_KEY missing' });
+    const resp = await fetch('https://api.elevenlabs.io/v1/voices', {
+      method: 'GET',
+      headers: { 'xi-api-key': ELEVENLABS_API_KEY }
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      return res.status(resp.status).json({ error: 'ElevenLabs error', details: text });
+    }
+    const data = await resp.json();
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: 'Voices fetch failed', details: e.message });
+  }
+});
+
 // Audio transcription proxy (streams multipart directly to OpenAI)
 app.post('/api/transcribe', authenticate, async (req, res) => {
   try {

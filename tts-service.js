@@ -15,14 +15,28 @@ class TTSService {
         this.initializeService();
     }
 
-    initializeService() {
-        // Check for ElevenLabs API key
-        if (window.ELEVENLABS_API_KEY) {
-            this.apiKey = window.ELEVENLABS_API_KEY;
+    async initializeService() {
+        // Use backend to check if TTS is available
+        try {
+            const user = auth?.currentUser;
+            const token = user ? await user.getIdToken() : null;
+            const resp = await fetch('/api/voices', {
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
+            if (!resp.ok) throw new Error('Voices not available');
+            const data = await resp.json();
+            // Try to find "Young Jerome" voice by name (case-insensitive)
+            const jerome = (data.voices || []).find(v => /young\s*jerome/i.test(v.name));
+            if (jerome && jerome.voice_id) {
+                this.voiceId = jerome.voice_id;
+                console.log('Using voice:', jerome.name, jerome.voice_id);
+            } else {
+                console.log('Young Jerome voice not found; keeping default');
+            }
             this.isEnabled = true;
-            console.log('ElevenLabs TTS service initialized');
-        } else {
-            console.log('ElevenLabs API key not found - TTS disabled');
+        } catch (e) {
+            console.log('TTS not available:', e.message);
+            this.isEnabled = false;
         }
     }
 
