@@ -208,6 +208,17 @@
             overflow-x: hidden !important; /* Disable horizontal scrolling */
         }
         
+        /* Make day cells 20% shorter */
+        .fc-daygrid-day-frame {
+            height: 80% !important;
+            min-height: 60px !important;
+        }
+        
+        .fc-timegrid-slot {
+            height: 80% !important;
+            min-height: 24px !important;
+        }
+        
         /* Disable horizontal scrolling in day view */
         .fc-scroller-liquid-absolute {
             overflow-x: hidden !important;
@@ -2152,7 +2163,7 @@
     <script type="module" src="firebase-config.js?v=2"></script>
     <script type="module" src="tts-service.js?v=5"></script>
     <script type="module" src="ai-assistant.js?v=6"></script>
-    <script type="module" src="app.js?v=19"></script>
+    <script type="module" src="app.js?v=20"></script>
     
     <!-- Authentication Script -->
     <script type="module">
