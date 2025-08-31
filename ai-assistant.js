@@ -54,7 +54,7 @@ function initializeOpenAI() {
                             formData.append('response_format', params.response_format);
                         }
                         
-                        const response = await fetch(`${window.API_BASE_URL}/api/transcriptions`, {
+                        const response = await fetch(`${window.API_BASE_URL}/api/transcribe`, {
                             method: 'POST',
                             headers: {
                                 'Authorization': `Bearer ${token}`
