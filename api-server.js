@@ -46,6 +46,7 @@ if (!process.env.OPENAI_API_KEY) {
   console.error('OPENAI_API_KEY is required');
 }
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '';
 
 // Health
 app.get('/healthz', (req, res) => res.json({ ok: true }));
@@ -78,6 +79,41 @@ app.post('/api/chat', authenticate, async (req, res) => {
     res.json(data);
   } catch (e) {
     res.status(500).json({ error: 'Chat proxy failed', details: e.message });
+  }
+});
+
+// ElevenLabs TTS proxy
+app.post('/api/tts', authenticate, async (req, res) => {
+  try {
+    if (!ELEVENLABS_API_KEY) return res.status(500).json({ error: 'ELEVENLABS_API_KEY missing' });
+    const { text, voiceId, settings } = req.body || {};
+    if (!text || !voiceId) return res.status(400).json({ error: 'text and voiceId required' });
+    const resp = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'audio/mpeg',
+        'Content-Type': 'application/json',
+        'xi-api-key': ELEVENLABS_API_KEY
+      },
+      body: JSON.stringify({
+        text,
+        model_id: 'eleven_monolingual_v1',
+        voice_settings: {
+          stability: settings?.stability ?? 0.5,
+          similarity_boost: settings?.similarity_boost ?? 0.8,
+          style: settings?.style ?? 0.0,
+          use_speaker_boost: settings?.use_speaker_boost ?? true
+        }
+      })
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      return res.status(resp.status).json({ error: 'ElevenLabs error', details: text });
+    }
+    res.setHeader('Content-Type', 'audio/mpeg');
+    resp.body.pipe(res);
+  } catch (e) {
+    res.status(500).json({ error: 'TTS proxy failed', details: e.message });
   }
 });
 

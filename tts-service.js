@@ -61,42 +61,65 @@ class TTSService {
 
     // Generate speech from text
     async speak(text, options = {}) {
-        if (!this.isAvailable()) {
-            console.log('TTS not available - text:', text);
-            return false;
-        }
-
         // Stop any current playback
         this.stop();
 
         try {
             console.log('Generating speech for:', text.substring(0, 100) + '...');
-            
-            const response = await fetch(`${this.baseUrl}/text-to-speech/${this.voiceId}`, {
-                method: 'POST',
-                headers: {
-                    'Accept': 'audio/mpeg',
-                    'Content-Type': 'application/json',
-                    'xi-api-key': this.apiKey
-                },
-                body: JSON.stringify({
-                    text: text,
-                    model_id: 'eleven_monolingual_v1',
-                    voice_settings: {
-                        stability: options.stability || 0.5,
-                        similarity_boost: options.similarity_boost || 0.8,
-                        style: options.style || 0.0,
-                        use_speaker_boost: options.use_speaker_boost || true
-                    }
-                })
-            });
 
-            if (!response.ok) {
-                throw new Error(`ElevenLabs API error: ${response.status} ${response.statusText}`);
+            let audioBlob;
+            if (typeof window !== 'undefined' && window.API_BASE_URL) {
+                // Use server proxy (preferred)
+                const resp = await fetch(`${window.API_BASE_URL}/api/tts`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        voiceId: this.voiceId,
+                        settings: {
+                            stability: options.stability || 0.5,
+                            similarity_boost: options.similarity_boost || 0.8,
+                            style: options.style || 0.0,
+                            use_speaker_boost: options.use_speaker_boost || true
+                        }
+                    })
+                });
+                if (!resp.ok) {
+                    throw new Error(`TTS proxy error: ${resp.status} ${resp.statusText}`);
+                }
+                audioBlob = await resp.blob();
+            } else {
+                // Direct browser call (requires window.ELEVENLABS_API_KEY)
+                if (!this.isAvailable()) {
+                    console.log('TTS not available - text:', text);
+                    return false;
+                }
+                const response = await fetch(`${this.baseUrl}/text-to-speech/${this.voiceId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'audio/mpeg',
+                        'Content-Type': 'application/json',
+                        'xi-api-key': this.apiKey
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        model_id: 'eleven_monolingual_v1',
+                        voice_settings: {
+                            stability: options.stability || 0.5,
+                            similarity_boost: options.similarity_boost || 0.8,
+                            style: options.style || 0.0,
+                            use_speaker_boost: options.use_speaker_boost || true
+                        }
+                    })
+                });
+                if (!response.ok) {
+                    throw new Error(`ElevenLabs API error: ${response.status} ${response.statusText}`);
+                }
+                audioBlob = await response.blob();
             }
 
-            // Convert response to audio blob
-            const audioBlob = await response.blob();
             const audioUrl = URL.createObjectURL(audioBlob);
             
             // Create and play audio
