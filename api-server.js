@@ -135,13 +135,21 @@ app.post('/api/tts', authenticate, async (req, res) => {
   }
 });
 
-// ElevenLabs list voices (no auth required)
+// ElevenLabs list voices (no auth required) - with fallback for permission issues
 app.get('/api/voices', async (req, res) => {
   console.log('[/api/voices] Request received');
   try {
     if (!ELEVENLABS_API_KEY) {
-      console.log('[/api/voices] Missing ElevenLabs API key');
-      return res.status(500).json({ error: 'ELEVENLABS_API_KEY missing' });
+      console.log('[/api/voices] Missing ElevenLabs API key - returning fallback');
+      // Return fallback with Young Jerome voice
+      return res.json({
+        voices: [{
+          voice_id: '6OzrBCQf8cjERkYgzSg8',
+          name: 'Young Jerome',
+          category: 'premade',
+          description: 'Young adult male voice'
+        }]
+      });
     }
     console.log('[/api/voices] Fetching voices from ElevenLabs');
     const resp = await fetch('https://api.elevenlabs.io/v1/voices', {
@@ -151,6 +159,20 @@ app.get('/api/voices', async (req, res) => {
     if (!resp.ok) {
       const text = await resp.text();
       console.log('[/api/voices] ElevenLabs error:', resp.status, text);
+      
+      // If permissions error, return fallback with Young Jerome
+      if (resp.status === 401 || text.includes('missing_permissions')) {
+        console.log('[/api/voices] Permissions issue - returning Young Jerome fallback');
+        return res.json({
+          voices: [{
+            voice_id: '6OzrBCQf8cjERkYgzSg8',
+            name: 'Young Jerome',
+            category: 'premade',
+            description: 'Young adult male voice'
+          }]
+        });
+      }
+      
       return res.status(resp.status).json({ error: 'ElevenLabs error', details: text });
     }
     const data = await resp.json();
@@ -158,7 +180,16 @@ app.get('/api/voices', async (req, res) => {
     res.json(data);
   } catch (e) {
     console.error('[/api/voices] Error:', e);
-    res.status(500).json({ error: 'Voices fetch failed', details: e.message });
+    // Return fallback on any error
+    console.log('[/api/voices] Returning Young Jerome fallback due to error');
+    res.json({
+      voices: [{
+        voice_id: '6OzrBCQf8cjERkYgzSg8',
+        name: 'Young Jerome',
+        category: 'premade',
+        description: 'Young adult male voice'
+      }]
+    });
   }
 });
 

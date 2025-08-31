@@ -23,6 +23,8 @@ let providers = [];
 let undoStack = [];
 let teamMembers = [];
 let currentInviteCode = null;
+let availableCalendars = [];
+let selectedCalendar = 'own';
 let currentUser = null;
 let isDarkMode = false;
 let isPrivacyMode = false;
@@ -3097,12 +3099,16 @@ async function initializeTeamManagement() {
     // Load current team members
     await loadTeamMembers();
     
+    // Set up calendar selector
+    initializeCalendarSelector();
+    
     // Set up event listeners
     const manageTeamBtn = document.getElementById('manage-team-btn');
     const closeTeamModal = document.getElementById('close-team-modal');
     const generateInviteBtn = document.getElementById('generate-invite-btn');
     const copyInviteBtn = document.getElementById('copy-invite-btn');
     const joinTeamBtn = document.getElementById('join-team-btn');
+    const calendarSelector = document.getElementById('calendar-selector');
     
     if (manageTeamBtn) {
         manageTeamBtn.addEventListener('click', showTeamModal);
@@ -3124,8 +3130,66 @@ async function initializeTeamManagement() {
         joinTeamBtn.addEventListener('click', joinTeam);
     }
     
+    if (calendarSelector) {
+        calendarSelector.addEventListener('change', switchCalendar);
+    }
+    
     // Check URL for invite code
     checkForInviteCode();
+}
+
+function initializeCalendarSelector() {
+    availableCalendars = [{
+        id: 'own',
+        name: 'My Calendar',
+        ownerId: auth.currentUser?.uid || '',
+        ownerEmail: auth.currentUser?.email || ''
+    }];
+    
+    // Add team calendars
+    teamMembers.forEach(member => {
+        if (member.isOwner) {
+            availableCalendars.push({
+                id: member.id,
+                name: `${member.email}'s Calendar`,
+                ownerId: member.ownerId || '',
+                ownerEmail: member.email
+            });
+        }
+    });
+    
+    updateCalendarSelector();
+}
+
+function updateCalendarSelector() {
+    const selector = document.getElementById('calendar-selector');
+    if (!selector) return;
+    
+    selector.innerHTML = '';
+    
+    availableCalendars.forEach(cal => {
+        const option = document.createElement('option');
+        option.value = cal.id;
+        option.textContent = cal.name;
+        if (cal.id === selectedCalendar) {
+            option.selected = true;
+        }
+        selector.appendChild(option);
+    });
+}
+
+async function switchCalendar(event) {
+    const newCalendar = event.target.value;
+    if (newCalendar === selectedCalendar) return;
+    
+    selectedCalendar = newCalendar;
+    showToast(`Switched to ${availableCalendars.find(c => c.id === newCalendar)?.name || 'calendar'}`);
+    
+    // Reload data for the selected calendar
+    await setupDataListeners();
+    renderCalendarEvents();
+    renderClientsList();
+    updateWeeklySummary();
 }
 
 async function loadTeamMembers() {
@@ -3183,6 +3247,7 @@ async function loadTeamMembers() {
         }
         
         renderTeamMembers();
+        initializeCalendarSelector(); // Update calendar selector when team changes
         
     } catch (error) {
         console.error('Error loading team members:', error);
@@ -3297,10 +3362,28 @@ async function copyInviteLink() {
 
 async function joinTeam() {
     const inviteCodeInput = document.getElementById('join-invite-code');
-    const inviteCode = inviteCodeInput?.value?.trim();
+    let inviteInput = inviteCodeInput?.value?.trim();
     
-    if (!inviteCode || !auth.currentUser) {
-        showToast('Please enter a valid invite code', 'error');
+    if (!inviteInput || !auth.currentUser) {
+        showToast('Please enter a valid invite code or URL', 'error');
+        return;
+    }
+    
+    // Extract invite code from URL if full URL was pasted
+    let inviteCode = inviteInput;
+    if (inviteInput.includes('?invite=')) {
+        const urlParams = new URLSearchParams(inviteInput.split('?')[1]);
+        inviteCode = urlParams.get('invite');
+    } else if (inviteInput.includes('invite_')) {
+        // Extract just the invite part if it's a partial URL
+        const match = inviteInput.match(/invite_[a-zA-Z0-9_]+/);
+        if (match) {
+            inviteCode = match[0];
+        }
+    }
+    
+    if (!inviteCode || !inviteCode.startsWith('invite_')) {
+        showToast('Please enter a valid invite code (should start with "invite_")', 'error');
         return;
     }
     
@@ -3315,7 +3398,7 @@ async function joinTeam() {
         const inviteSnapshot = await getDocs(inviteQuery);
         
         if (inviteSnapshot.empty) {
-            showToast('Invalid or expired invite code', 'error');
+            showToast('Invalid or expired invite code. Make sure you copied the full link.', 'error');
             return;
         }
         
@@ -3324,13 +3407,26 @@ async function joinTeam() {
         
         // Check if invite hasn't expired
         if (inviteData.expiresAt.toDate() < new Date()) {
-            showToast('This invite has expired', 'error');
+            showToast('This invite has expired. Ask for a new invite link.', 'error');
             return;
         }
         
         // Check if user is trying to join their own team
         if (inviteData.ownerId === auth.currentUser.uid) {
             showToast('You cannot join your own team', 'error');
+            return;
+        }
+        
+        // Check if user is already a member
+        const existingTeamQuery = query(
+            collection(db, 'teams'),
+            where('ownerId', '==', inviteData.ownerId),
+            where('memberId', '==', auth.currentUser.uid)
+        );
+        const existingTeam = await getDocs(existingTeamQuery);
+        
+        if (!existingTeam.empty) {
+            showToast('You are already a member of this team', 'warning');
             return;
         }
         
@@ -3351,17 +3447,23 @@ async function joinTeam() {
             usedAt: Timestamp.now()
         });
         
-        showToast('Successfully joined the team!');
+        showToast(`Successfully joined ${inviteData.ownerEmail}'s team!`);
         inviteCodeInput.value = '';
         hideTeamModal();
         
-        // Reload data to include new team's calendar
-        await initializeData();
+        // Reload team data and calendar
+        await loadTeamMembers();
+        initializeCalendarSelector();
+        await setupDataListeners();
         renderCalendarEvents();
         
     } catch (error) {
         console.error('Error joining team:', error);
-        showToast('Failed to join team', 'error');
+        if (error.code === 'permission-denied') {
+            showToast('Teams feature requires Firestore security rules setup', 'error');
+        } else {
+            showToast('Failed to join team. Please try again.', 'error');
+        }
     }
 }
 
