@@ -1797,16 +1797,11 @@ function initializeCalendar() {
     const isMobile = window.innerWidth < 768;
     const initialView = isMobile ? 'timeGridWeek' : 'dayGridMonth';
 
-    // Compute available viewport height for calendar (no vertical scroll)
+    // Compute available viewport height based on the calendar's top position
     function getCalendarHeight() {
-        const headerEl = document.querySelector('main > header');
-        const mainEl = document.querySelector('main');
-        const headerH = headerEl ? headerEl.offsetHeight : 0;
-        const styles = mainEl ? getComputedStyle(mainEl) : null;
-        const padTop = styles ? parseInt(styles.paddingTop || '0', 10) : 0;
-        const padBottom = styles ? parseInt(styles.paddingBottom || '0', 10) : 0;
-        const available = window.innerHeight - headerH - padTop - padBottom - 8; // small safety
-        return Math.max(540, available);
+        const rect = calendarEl.getBoundingClientRect();
+        const available = window.innerHeight - rect.top - 8; // small safety margin
+        return Math.max(560, available);
     }
     
     calendar = new FullCalendar.Calendar(calendarEl, {
