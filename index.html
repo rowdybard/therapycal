@@ -1045,17 +1045,8 @@
         
         /* Better mobile calendar height */
         @media (max-width: 768px) {
-            #calendar {
-                max-height: calc(100vh - 140px);
-            }
-            
             .fc-scroller {
-                max-height: calc(100vh - 220px);
                 scroll-snap-type: y mandatory;
-            }
-            
-            .fc-timegrid-body {
-                min-height: 500px !important;
             }
         }
         
@@ -1544,8 +1535,8 @@
             </div>
         </header>
 
-        <div class="flex-grow p-2 md:p-3 min-h-0" style="display: flex; flex-direction: column; overflow: hidden;">
-            <div id='calendar' class="bg-white rounded-lg shadow-sm" style="padding-bottom: 0;"></div>
+        <div class="flex-grow p-2 md:p-3 min-h-0">
+            <div id='calendar' class="bg-white rounded-lg shadow-sm" style="height: 820px;"></div>
         </div>
     </main>
     
@@ -2159,7 +2150,7 @@
     <script type="module" src="firebase-config.js?v=2"></script>
     <script type="module" src="tts-service.js?v=5"></script>
     <script type="module" src="ai-assistant.js?v=6"></script>
-    <script type="module" src="app.js?v=12"></script>
+    <script type="module" src="app.js?v=13"></script>
     
     <!-- Authentication Script -->
     <script type="module">
