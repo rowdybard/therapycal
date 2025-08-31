@@ -33,9 +33,16 @@ class TTSService {
                 console.log('Young Jerome voice not found; keeping default');
             }
             this.isEnabled = true;
+            if (typeof addTTSControls === 'function') {
+                addTTSControls();
+            }
         } catch (e) {
-            console.log('TTS not available:', e.message);
-            this.isEnabled = false;
+            console.log('TTS voices fetch failed, proceeding with default voice:', e.message);
+            // Enable TTS anyway; server will enforce key presence
+            this.isEnabled = true;
+            if (typeof addTTSControls === 'function') {
+                addTTSControls();
+            }
         }
     }
 
@@ -63,7 +70,7 @@ class TTSService {
 
     // Check if TTS is available and enabled
     isAvailable() {
-        return this.isEnabled && this.apiKey;
+        return this.isEnabled;
     }
 
     // Stop current audio playback
