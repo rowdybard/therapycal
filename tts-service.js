@@ -68,9 +68,9 @@ class TTSService {
             console.log('Generating speech for:', text.substring(0, 100) + '...');
 
             let audioBlob;
-            if (typeof window !== 'undefined' && window.API_BASE_URL) {
-                // Use server proxy (preferred)
-                const resp = await fetch(`${window.API_BASE_URL}/api/tts`, {
+            if (typeof window !== 'undefined') {
+                // Use same-origin server proxy (preferred)
+                const resp = await fetch(`/api/tts`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'

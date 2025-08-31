@@ -51,9 +51,23 @@ const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '';
 // Health
 app.get('/healthz', (req, res) => res.json({ ok: true }));
 
+// Debug endpoint to confirm env visibility (safe: no secrets exposed)
+app.get('/debug/env', (req, res) => {
+  res.json({
+    OPENAI_API_KEY_present: !!OPENAI_API_KEY,
+    OPENAI_API_KEY_length: OPENAI_API_KEY ? OPENAI_API_KEY.length : 0,
+    ELEVENLABS_API_KEY_present: !!ELEVENLABS_API_KEY,
+    ELEVENLABS_API_KEY_length: ELEVENLABS_API_KEY ? ELEVENLABS_API_KEY.length : 0,
+    FIREBASE_CONFIG_present: !!process.env.FIREBASE_CONFIG,
+    ADMIN_READY: adminReady,
+  });
+});
+
 // Chat completions proxy
 app.post('/api/chat', authenticate, async (req, res) => {
   try {
+    // Log presence (not value) of the key for debugging
+    console.log('[/api/chat] OPENAI_API_KEY present:', !!OPENAI_API_KEY, 'len:', OPENAI_API_KEY ? OPENAI_API_KEY.length : 0);
     if (!OPENAI_API_KEY) return res.status(500).json({ error: 'OPENAI_API_KEY missing' });
     const params = req.body || {};
     // Forward to OpenAI (JSON API)

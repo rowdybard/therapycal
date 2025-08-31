@@ -9,9 +9,9 @@ import { auth } from './firebase-config.js';
 // Initialize OpenAI client
 let openai = null;
 
-// Initialize OpenAI using backend API
+// Initialize OpenAI using same-origin backend API
 function initializeOpenAI() {
-    if (!openai && window.API_BASE_URL) {
+    if (!openai) {
         // Use backend API proxy
         openai = {
             chat: {
@@ -22,7 +22,7 @@ function initializeOpenAI() {
                         if (!user) throw new Error('Authentication required');
                         const token = await user.getIdToken();
                         
-                        const response = await fetch(`${window.API_BASE_URL}/api/chat`, {
+                        const response = await fetch(`/api/chat`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -54,7 +54,7 @@ function initializeOpenAI() {
                             formData.append('response_format', params.response_format);
                         }
                         
-                        const response = await fetch(`${window.API_BASE_URL}/api/transcribe`, {
+                        const response = await fetch(`/api/transcribe`, {
                             method: 'POST',
                             headers: {
                                 'Authorization': `Bearer ${token}`
